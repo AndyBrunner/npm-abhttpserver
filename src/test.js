@@ -18,7 +18,7 @@ var MyServer = /** @class */ (function (_super) {
         return _super !== null && _super.apply(this, arguments) || this;
     }
     MyServer.prototype.get = function (url, request, response) {
-        response.sendText(response, "Hello - The URL sent was " + url);
+        this.sendText(response, "Hello - The URL sent was " + url);
     };
     return MyServer;
 }(ABHTTPServer_1["default"]));

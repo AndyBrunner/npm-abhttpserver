@@ -21,7 +21,7 @@ import ABHTTPServer from './ABHTTPServer'
 
 class MyServer extends ABHTTPServer {
   get(url: string, request: any, response: any) {
-    response.sendText(response, `Hello - The URL sent was ${url}`)
+    this.sendText(response, `Hello - The URL sent was ${url}`)
   }
 }
 
@@ -41,6 +41,25 @@ Detailed debugging to the console is supported by setting the environment variab
 
 ```bash
 AB_DEBUG=true node app.js
+```
+
+Exmple debug output
+
+```text
+2018-07-18 09:25:31.833 ABHTTPSERVER Debug: Constructor called with (8080, 8080)
+2018-07-18 09:25:31.837 ABHTTPSERVER Debug: Creating HTTP server on port 8080
+2018-07-18 09:25:31.843 ABHTTPSERVER Debug: Creating HTTPS server on port 8081
+2018-07-18 09:25:31.853 ABHTTPSERVER Debug: HTTP (net.Server) server is in listen mode
+2018-07-18 09:25:31.853 ABHTTPSERVER Debug: HTTP server started on port 8080
+2018-07-18 09:25:31.853 ABHTTPSERVER Debug: HTTPS (net.Server) server is in listen mode
+2018-07-18 09:25:31.853 ABHTTPSERVER Debug: HTTPS server started on port 8081
+2018-07-18 09:25:36.435 ABHTTPSERVER Debug: HTTPS (http.Server) server established connection
+2018-07-18 09:25:36.435 ABHTTPSERVER Debug: HTTPS (tls.Server) server received TLS resume session status request
+2018-07-18 09:25:36.435 ABHTTPSERVER Debug: HTTPS (tls.Server) server received certificate status request
+2018-07-18 09:25:36.446 ABHTTPSERVER Debug: HTTPS (tls.Server) server started TLS session
+2018-07-18 09:25:36.446 ABHTTPSERVER Debug: HTTPS (tls.Server) completed TLS handshaking process
+2018-07-18 09:25:36.449 ABHTTPSERVER Debug: HTTPS 1.1 GET /index.html
+2018-07-18 09:25:36.451 ABHTTPSERVER Debug: HTTPS (http.Server) server received client request
 ```
 
 ## Notes
