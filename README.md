@@ -72,16 +72,18 @@ Exmple debug output
 * npm install express
 * npm install @types/node
 
-## License
+## Unlicense
 
-Public Domain: _This software shall be used for Good, not Evil._
+See [unlicense.org](http://unlicense.org)
+
+_This software shall be used for Good, not Evil._
 
 ## GIT Source code
 
-You will find the source code on https://github.com/AndyBrunner/npm-abhttpserver.git
+You will find the source code on [GitHub](https://github.com/AndyBrunner/npm-abhttpserver.git)
 
 ## Support
 
 Support is provided on a best efford base. If you have any question, suggestion or find any issues, please report them. You may also contact the original author thru email at the address andy.brunner@abdata.ch.
 
-"Made with love in the beautiful city of Zurich, Switzerland"
+### _Made with love in the beautiful city of Zurich, Switzerland_
