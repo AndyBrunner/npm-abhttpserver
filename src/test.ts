@@ -1,8 +1,8 @@
-/* ABHTTPServer Test */
+/* ABHttpServer Test */
 
-import ABHTTPServer from './ABHTTPServer'
+import {ABHttpServer} from './ABHttpServer'
 
-class MyServer extends ABHTTPServer {
+class MyServer extends ABHttpServer {
   get(url: string, request: any, response: any) {
     this.sendText(response, `Hello - The URL sent was ${url}`)
   }

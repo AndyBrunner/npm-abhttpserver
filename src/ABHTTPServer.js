@@ -1,133 +1,132 @@
 "use strict";
 exports.__esModule = true;
-/*
-Simple HTTP Server Framework
-*/
+var Express = require("express");
 /**
- * ABHTTPServer Abstract Class
- */
-var ABHTTPServer = /** @class */ (function () {
+ * Simple HTTP Server Framework
+*/
+var ABHttpServer = /** @class */ (function () {
     /**
      * Create the HTTP server
      * @param httpPort Port number (1 - 65535) for the HTTP server or 0
      * @param httpsPort Port number (1 - 65535) for the HTTPS server or 0
      */
-    function ABHTTPServer(httpPort, httpsPort) {
+    function ABHttpServer(httpPort, httpsPort) {
         var _this = this;
         this.DEBUG = (process.env.AB_DEBUG === 'true') ? true : false;
-        this.express = require('express');
-        this.app = this.express();
+        this.app = Express();
         this.httpServer = null;
         this.httpsServer = null;
-        this.DEBUG ? this.logDebug("Constructor called with (" + httpPort + ", " + httpPort + ")") : true;
+        this.httpHeaders = {};
+        this.DEBUG ? this.logDebug("Constructor called (" + httpPort + ", " + httpsPort + ")") : true;
         var http = require('http');
         var https = require('https');
         var fs = require('fs');
         var path = require('path');
-        /* Check constructor arguments */
+        // Check constructor arguments
         if (typeof arguments[0] !== 'number' || typeof arguments[1] !== 'number') {
-            this.DEBUG ? this.logDebug('Usage is ABHTTPServer(httpPort | 0, httpsPort | 0') : true;
-            return (undefined);
+            throw new Error('ABHttpServer: Usage is ABHttpServer(httpPort | 0, httpsPort | 0');
         }
         if (arguments[0] < 0 || arguments[0] > 65535 || arguments[1] < 0 || arguments[1] > 65535) {
-            this.DEBUG ? this.logDebug('Both port arguments must be between 0 and 65535') : true;
-            return (undefined);
+            throw new Error('ABHttpServer: Both port arguments must be between 0 and 65535');
         }
         if (arguments[0] % 1 !== 0 || arguments[1] % 1 !== 0) {
-            this.DEBUG ? this.logDebug('Both port arguments must have integer values') : true;
-            return (undefined);
+            throw new Error('ABHttpServer: Both port arguments must have integer values');
         }
         if (arguments[0] === arguments[1]) {
-            this.DEBUG ? this.logDebug('Both ports must not be equal') : true;
-            return (undefined);
+            throw new Error('ABHttpServer: Both ports must not be equal');
         }
         if (arguments[0] === 0 && arguments[1] === 0) {
-            this.DEBUG ? this.logDebug('At least one port must be non-zero') : true;
-            return (undefined);
+            throw new Error('ABHttpServer: At least one port must be non-zero');
         }
-        /* Start the HTTP server */
+        // Start the HTTP server
         if (httpPort != 0) {
             this.DEBUG ? this.logDebug("Creating HTTP server on port " + httpPort) : true;
             this.httpServer = http.createServer(this.app);
             this.startServer(this.httpServer, httpPort, false);
         }
-        /* Start the HTTPS server */
+        // Start the HTTPS server
         if (httpsPort != 0) {
             this.DEBUG ? this.logDebug("Creating HTTPS server on port " + httpsPort) : true;
             var httpsOptions = {
                 key: fs.readFileSync(path.join(__dirname, 'x509-servercert.pem')),
                 cert: fs.readFileSync(path.join(__dirname, 'x509-certchain.pem'))
-                /* Add "allowHTTP1: true" when using the http2 module */
             };
             this.httpsServer = https.createServer(httpsOptions, this.app);
             this.startServer(this.httpsServer, httpsPort, true);
         }
-        /* Handle all HTTP requests */
+        // Do not send Express HTTP header 'x-powered-by'
+        this.app.disable('x-powered-by');
+        // Handle all HTTP requests
         this.app.all('*', function (request, response) {
             _this.DEBUG ? _this.logDebug(request.protocol.toUpperCase() + " " + request.httpVersion + " " + request.method + " " + request.url) : true;
             switch (request.method) {
-                /* Method GET */
                 case 'GET': {
                     _this.get(request.url, request, response);
                     break;
                 }
-                /* Method HEAD */
                 case 'HEAD': {
                     _this.head(request.url, request, response);
                     break;
                 }
-                /* Method PUT */
                 case 'PUT': {
-                    var postData_1 = '';
+                    var requestData_1 = '';
                     request.on('data', function (dataChunk) {
-                        postData_1 += dataChunk;
+                        requestData_1 += dataChunk;
                     });
                     request.on('end', function () {
-                        _this.DEBUG ? _this.logDebug("Received PUT data size: " + postData_1.length + " bytes") : true;
+                        _this.DEBUG ? _this.logDebug("PUT data received: " + requestData_1.length + " bytes") : true;
+                        _this.put(request.url, requestData_1, request, response);
                     });
-                    _this.put(request.url, postData_1, request, response);
                     break;
                 }
-                /* Method POST */
                 case 'POST': {
-                    var postData_2 = '';
+                    var requestData_2 = '';
                     request.on('data', function (dataChunk) {
-                        postData_2 += dataChunk;
+                        requestData_2 += dataChunk;
                     });
                     request.on('end', function () {
-                        _this.DEBUG ? _this.logDebug("Received POST data size: " + postData_2.length + " bytes") : true;
+                        _this.DEBUG ? _this.logDebug("POST data received: " + requestData_2.length + " bytes") : true;
+                        _this.post(request.url, requestData_2, request, response);
                     });
-                    _this.post(request.url, postData_2, request, response);
                     break;
                 }
-                /* Method DELETE */
                 case 'DELETE': {
-                    _this["delete"](request.url, request, response);
+                    var requestData_3 = '';
+                    request.on('data', function (dataChunk) {
+                        requestData_3 += dataChunk;
+                    });
+                    request.on('end', function () {
+                        _this.DEBUG ? _this.logDebug("DELETE data received: " + requestData_3.length + " bytes") : true;
+                        _this["delete"](request.url, requestData_3, request, response);
+                    });
                     break;
                 }
-                /* Method CONNECT */
                 case 'CONNECT': {
                     _this.connect(request.url, request, response);
                     break;
                 }
-                /* Method TRACE */
                 case 'TRACE': {
                     _this.trace(request.url, request, response);
                     break;
                 }
-                /* Method PATCH */
                 case 'PATCH': {
-                    _this.patch(request.url, request, response);
+                    var requestData_4 = '';
+                    request.on('data', function (dataChunk) {
+                        requestData_4 += dataChunk;
+                    });
+                    request.on('end', function () {
+                        _this.DEBUG ? _this.logDebug("PATCH data received: " + requestData_4.length + " bytes") : true;
+                        _this.patch(request.url, requestData_4, request, response);
+                    });
                     break;
                 }
-                /* Method OPTIONS */
                 case 'OPTIONS': {
                     _this.options(request.url, request, response);
                     break;
                 }
                 default: {
-                    _this.DEBUG ? _this.logDebug("Unhandled HTTP method " + request.method) : true;
-                    _this.sendText(response, "Unhandled HTTP method <" + request.method + ">");
+                    _this.DEBUG ? _this.logDebug("Unsupported HTTP method " + request.method) : true;
+                    _this.sendText(response, "ABHttpServer: Unsupported HTTP method <" + request.method + ">", 501);
                 }
             }
         });
@@ -138,16 +137,16 @@ var ABHTTPServer = /** @class */ (function () {
      * @param port    TCP/IP port number
      * @param secure  SSL/TLS flag
      */
-    ABHTTPServer.prototype.startServer = function (server, port, secure) {
+    ABHttpServer.prototype.startServer = function (server, port, secure) {
         var _this = this;
-        /* Establish net.Server event handlers */
+        // Establish net.Server event handlers
         server.on('error', function (error) {
             _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + (" (net.Server) server received error: " + error)) : true;
         });
         server.on('listening', function () {
             _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + " (net.Server) server is in listen mode") : true;
         });
-        /* Establish http.Server event handlers */
+        // Establish http.Server event handlers
         server.on('checkContinue', function (request, response) {
             _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' (http.Server) server received <HTTP 100 continue>') : true;
             response.writeContinue();
@@ -174,7 +173,7 @@ var ABHTTPServer = /** @class */ (function () {
         server.on('upgrade', function (request, socket, head) {
             _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' (http.Server) server received upgrade request') : true;
         });
-        /* Establish tls.server event handlers */
+        // Establish tls.server event handlers
         server.on('newSession', function (sessionId, sessionData, callback) {
             _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' (tls.Server) server started TLS session') : true;
             callback();
@@ -193,7 +192,7 @@ var ABHTTPServer = /** @class */ (function () {
         server.on('tlsClientError', function (exception, tlsSocket) {
             _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' (tls.Server) received an error before successful connection') : true;
         });
-        /* Start the server */
+        // Start the server
         server.listen(port, function () {
             _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + (" server started on port " + port)) : true;
         });
@@ -202,17 +201,17 @@ var ABHTTPServer = /** @class */ (function () {
     * Write debugging data to the console
     * @param message Debug message to be written
     */
-    ABHTTPServer.prototype.logDebug = function (message) {
+    ABHttpServer.prototype.logDebug = function (message) {
         if (this.DEBUG) {
             var date = new Date();
             var timestamp = date.getFullYear() + '-' +
-                this.dateTimePad((date.getMonth() + 1), 2) + '-' +
-                this.dateTimePad(date.getDate(), 2) + ' ' +
-                this.dateTimePad(date.getHours(), 2) + ':' +
-                this.dateTimePad(date.getMinutes(), 2) + ':' +
-                this.dateTimePad(date.getSeconds(), 2) + '.' +
-                this.dateTimePad(date.getMilliseconds(), 3);
-            console.log(timestamp + " ABHTTPSERVER Debug: " + message);
+                this.dateTimePad((date.getMonth() + 1).toString(), 2) + '-' +
+                this.dateTimePad(date.getDate().toString(), 2) + ' ' +
+                this.dateTimePad(date.getHours().toString(), 2) + ':' +
+                this.dateTimePad(date.getMinutes().toString(), 2) + ':' +
+                this.dateTimePad(date.getSeconds().toString(), 2) + '.' +
+                this.dateTimePad(date.getMilliseconds().toString(), 3);
+            console.debug(timestamp + " ABHttpServer: " + message);
         }
     };
     /**
@@ -220,7 +219,7 @@ var ABHTTPServer = /** @class */ (function () {
      * @param value
      * @param digits
      */
-    ABHTTPServer.prototype.dateTimePad = function (value, digits) {
+    ABHttpServer.prototype.dateTimePad = function (value, digits) {
         var number = value;
         while (number.toString().length < digits) {
             number = "0" + number;
@@ -230,14 +229,13 @@ var ABHTTPServer = /** @class */ (function () {
     /**
      * Terminate the HTTP/HTTPS server
      */
-    ABHTTPServer.prototype.terminate = function () {
-        /* Stop HTTP server */
-        if (this.httpServer !== null) {
+    ABHttpServer.prototype.terminate = function () {
+        this.DEBUG ? this.logDebug('Invoked method terminate()') : true;
+        if (this.httpServer) {
             this.httpServer.close();
             this.httpServer = null;
         }
-        /* Stop HTTPS server */
-        if (this.httpsServer !== null) {
+        if (this.httpsServer) {
             this.httpsServer.close();
             this.httpsServer = null;
         }
@@ -246,39 +244,99 @@ var ABHTTPServer = /** @class */ (function () {
      * Returns the express handler
      * @returns Express handler
      */
-    ABHTTPServer.prototype.getapp = function () {
+    ABHttpServer.prototype.getapp = function () {
         return this.app;
     };
     /**
      * Sends HTML data to the client
-     * @param response
-     * @param text      HTML to be sent
+     * @param response    Express.Response object
+     * @param text        HTML to be sent
+     * @param httpStatus  HTTP Status code (defaults to 200)
      */
-    ABHTTPServer.prototype.sendHTML = function (response, text) {
-        response.setHeader('Content-Type', 'text/html');
-        response.end(text);
+    ABHttpServer.prototype.sendHTML = function (response, text, httpStatus) {
+        if (httpStatus === void 0) { httpStatus = 200; }
+        this.sendData(response, 'text/html', text, httpStatus);
     };
     /**
      * Sends plain text to the client
      * @param response
      * @param text      Text to be sent
+     * @param httpStatus  HTTP Status code (defaults to 200)
      */
-    ABHTTPServer.prototype.sendText = function (response, text) {
-        response.setHeader('Content-Type', 'text/plain');
+    ABHttpServer.prototype.sendText = function (response, text, httpStatus) {
+        if (httpStatus === void 0) { httpStatus = 200; }
+        this.sendData(response, 'text/plain', text, httpStatus);
+    };
+    /**
+     * Set HTTP headers to be added to every response
+     *
+     * Example:
+     * this.setHeaders({'Access-Control-Allow-Origin': '*',
+     *                  'Access-Control-Allow-Methods': 'GET, POST, DELETE, PUT' })
+     *
+     * @param httpHeaders HTTP Headers to be added
+     */
+    ABHttpServer.prototype.setHeaders = function (httpHeaders) {
+        this.DEBUG ? this.logDebug("Invoked method setHeaders(" + httpHeaders + ")") : true;
+        this.httpHeaders = httpHeaders;
+    };
+    /**
+     * Writes the data with HTTP header
+     * @param response      Express.Response
+     * @param mimeType      HTTP Content-Type
+     * @param text          Data to be written
+     * @param httpStatus    HTTP Status code
+     */
+    ABHttpServer.prototype.sendData = function (response, mimeType, text, httpStatus) {
+        this.DEBUG ? this.logDebug("Sending HTTP status " + httpStatus + " with " + text.length + " bytes of " + mimeType + " data") : true;
+        // Send additional HTTP headers
+        if (!this.httpHeaders) {
+            for (var key in this.httpHeaders) {
+                response.set(key, this.httpHeaders[key]);
+            }
+        }
+        response.writeHead(httpStatus, { 'Content-Type': mimeType });
         response.end(text);
     };
-    /* Method prototypes to be overwritten/implemented in subclass */
-    ABHTTPServer.prototype.clientConnect = function (socket) { };
-    ABHTTPServer.prototype.clientError = function (err, socket) { };
-    ABHTTPServer.prototype.get = function (url, request, response) { };
-    ABHTTPServer.prototype.put = function (url, data, request, response) { };
-    ABHTTPServer.prototype.post = function (url, data, request, response) { };
-    ABHTTPServer.prototype.options = function (url, request, response) { };
-    ABHTTPServer.prototype.head = function (url, request, response) { };
-    ABHTTPServer.prototype["delete"] = function (url, request, response) { };
-    ABHTTPServer.prototype.connect = function (url, request, response) { };
-    ABHTTPServer.prototype.trace = function (url, request, response) { };
-    ABHTTPServer.prototype.patch = function (url, request, response) { };
-    return ABHTTPServer;
+    /**
+     * Send HTTP 'Not Implemented' Error
+     * @param method
+     * @param response Express.response
+     */
+    ABHttpServer.prototype.notImplementedError = function (method, response) {
+        this.DEBUG ? this.logDebug("HTTP method " + method + " not implemented by subclass") : true;
+        response.status(501).end("HTTP method " + method + " is not supported");
+    };
+    // Method prototypes to be overwritten in subclass
+    ABHttpServer.prototype.clientConnect = function (socket) { };
+    ABHttpServer.prototype.clientError = function (err, socket) { };
+    ABHttpServer.prototype.get = function (url, request, response) {
+        this.notImplementedError('GET', response);
+    };
+    ABHttpServer.prototype.put = function (url, data, request, response) {
+        this.notImplementedError('PUT', response);
+    };
+    ABHttpServer.prototype.post = function (url, data, request, response) {
+        this.notImplementedError('POST', response);
+    };
+    ABHttpServer.prototype.options = function (url, request, response) {
+        this.notImplementedError('OPTIONS', response);
+    };
+    ABHttpServer.prototype.head = function (url, request, response) {
+        this.notImplementedError('HEAD', response);
+    };
+    ABHttpServer.prototype["delete"] = function (url, data, request, response) {
+        this.notImplementedError('DELETE', response);
+    };
+    ABHttpServer.prototype.connect = function (url, request, response) {
+        this.notImplementedError('CONNECT', response);
+    };
+    ABHttpServer.prototype.trace = function (url, request, response) {
+        this.notImplementedError('TRACE', response);
+    };
+    ABHttpServer.prototype.patch = function (url, data, request, response) {
+        this.notImplementedError('PATCH', response);
+    };
+    return ABHttpServer;
 }());
-exports["default"] = ABHTTPServer;
+exports.ABHttpServer = ABHttpServer;

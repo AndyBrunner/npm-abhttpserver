@@ -1,12 +1,12 @@
 {
   "name": "abhttpserver",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Simple HTTP Server Framework ",
   "main": "test.js",
   "scripts": {
-    "test": "node test.js",
-    "debug": "AB_DEBUG=true node test.js",
-    "edit": "code . & tsc src/*.ts -w"
+    "run": "node src/test.js",
+    "debug": "AB_DEBUG=true node src/test.js",
+    "edit": "code . && tsc src/*.ts -w --declaration --declarationDir ./typings"
   },
   "keywords": [
     "http",
@@ -15,12 +15,13 @@
     "https-server"
   ],
   "author": "andy.brunner@abdata.ch",
-  "license": "Public Domain",
+  "license": "UNLICENSE",
   "dependencies": {
     "express": "^4.16.3"
   },
   "devDependencies": {
-    "@types/node": "^10.5.1"
+    "@types/express": "^4.16.0",
+    "@types/node": "^10.5.2"
   },
   "repository": {
     "type": "git",
