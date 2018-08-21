@@ -10,6 +10,7 @@ export declare abstract class ABHttpServer {
     private httpServer;
     private httpsServer;
     private httpHeaders;
+    private isActive;
     /**
      * Create the HTTP server
      * @param httpPort Port number (1 - 65535) for the HTTP server or 0

@@ -1,5 +1,9 @@
 # Revision History
 
+## Version 1.0.1 / 21-Aug-2018
+
+* Change: Ignore all calls after method terminate()
+
 ## Version 1.0.0 / 05-Aug-2018
 
 * Change: Throw Error() in constructor for invalid parameters

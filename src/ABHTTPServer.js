@@ -17,6 +17,7 @@ var ABHttpServer = /** @class */ (function () {
         this.httpServer = null;
         this.httpsServer = null;
         this.httpHeaders = {};
+        this.isActive = false;
         this.DEBUG ? this.logDebug("Constructor called (" + httpPort + ", " + httpsPort + ")") : true;
         var http = require('http');
         var https = require('https');
@@ -130,6 +131,8 @@ var ABHttpServer = /** @class */ (function () {
                 }
             }
         });
+        // Mark server active
+        this.isActive = true;
     }
     /**
      * Establish server events and start the server
@@ -230,6 +233,9 @@ var ABHttpServer = /** @class */ (function () {
      * Terminate the HTTP/HTTPS server
      */
     ABHttpServer.prototype.terminate = function () {
+        if (!this.isActive) {
+            return;
+        }
         this.DEBUG ? this.logDebug('Invoked method terminate()') : true;
         if (this.httpServer) {
             this.httpServer.close();
@@ -239,12 +245,17 @@ var ABHttpServer = /** @class */ (function () {
             this.httpsServer.close();
             this.httpsServer = null;
         }
+        // Mark server inactive
+        this.isActive = false;
     };
     /**
      * Returns the express handler
      * @returns Express handler
      */
     ABHttpServer.prototype.getapp = function () {
+        if (!this.isActive) {
+            return null;
+        }
         return this.app;
     };
     /**
@@ -255,6 +266,9 @@ var ABHttpServer = /** @class */ (function () {
      */
     ABHttpServer.prototype.sendHTML = function (response, text, httpStatus) {
         if (httpStatus === void 0) { httpStatus = 200; }
+        if (!this.isActive) {
+            return;
+        }
         this.sendData(response, 'text/html', text, httpStatus);
     };
     /**
@@ -265,6 +279,9 @@ var ABHttpServer = /** @class */ (function () {
      */
     ABHttpServer.prototype.sendText = function (response, text, httpStatus) {
         if (httpStatus === void 0) { httpStatus = 200; }
+        if (!this.isActive) {
+            return;
+        }
         this.sendData(response, 'text/plain', text, httpStatus);
     };
     /**
@@ -277,6 +294,9 @@ var ABHttpServer = /** @class */ (function () {
      * @param httpHeaders HTTP Headers to be added
      */
     ABHttpServer.prototype.setHeaders = function (httpHeaders) {
+        if (!this.isActive) {
+            return;
+        }
         this.DEBUG ? this.logDebug("Invoked method setHeaders(" + httpHeaders + ")") : true;
         this.httpHeaders = httpHeaders;
     };

@@ -10,7 +10,8 @@ export abstract class ABHttpServer {
   private app                     = Express()
   private httpServer: any         = null
   private httpsServer: any        = null
-  private httpHeaders: any        = {}  
+  private httpHeaders: any        = {}
+  private isActive: boolean       = false
 
   /**
    * Create the HTTP server
@@ -155,7 +156,10 @@ export abstract class ABHttpServer {
           this.sendText(response, `ABHttpServer: Unsupported HTTP method <${request.method}>`, 501)
         }
       }
-    });
+    })
+
+    // Mark server active
+    this.isActive = true
   }
 
   /**
@@ -233,6 +237,7 @@ export abstract class ABHttpServer {
   * @param message Debug message to be written
   */
   private logDebug(message: string) {
+
     if (this.DEBUG) {
       
       var date = new Date()
@@ -254,6 +259,7 @@ export abstract class ABHttpServer {
    * @param digits 
    */
   private dateTimePad(value: string, digits: number) : string {
+
     let number = value
     while (number.toString().length < digits) {
       number = `0${number}`
@@ -266,6 +272,10 @@ export abstract class ABHttpServer {
    */
   terminate(): void {
 
+    if (!this.isActive) {
+      return
+    }
+
     this.DEBUG ? this.logDebug('Invoked method terminate()') : true
 
     if (this.httpServer) {
@@ -277,6 +287,9 @@ export abstract class ABHttpServer {
       this.httpsServer.close()
       this.httpsServer = null
     }
+
+    // Mark server inactive
+    this.isActive = false
   }
 
   /**
@@ -284,6 +297,11 @@ export abstract class ABHttpServer {
    * @returns Express handler
    */
   getapp(): any {
+    
+    if (!this.isActive) {
+      return null
+    }
+
     return this.app
   }
 
@@ -294,6 +312,11 @@ export abstract class ABHttpServer {
    * @param httpStatus  HTTP Status code (defaults to 200)
    */
   sendHTML(response: Express.Response, text: string, httpStatus: number = 200) {
+    
+    if (!this.isActive) {
+      return
+    }
+    
     this.sendData(response, 'text/html', text, httpStatus)
   }
 
@@ -304,6 +327,11 @@ export abstract class ABHttpServer {
    * @param httpStatus  HTTP Status code (defaults to 200)
    */
   sendText(response: Express.Response, text: string, httpStatus: number = 200) {
+    
+    if (!this.isActive) {
+      return
+    }
+
     this.sendData(response, 'text/plain', text, httpStatus)
   }
 
@@ -317,6 +345,10 @@ export abstract class ABHttpServer {
    * @param httpHeaders HTTP Headers to be added
    */
   setHeaders(httpHeaders: any) {
+
+    if (!this.isActive) {
+      return
+    }
 
     this.DEBUG ? this.logDebug(`Invoked method setHeaders(${httpHeaders})`) : true
     this.httpHeaders = httpHeaders

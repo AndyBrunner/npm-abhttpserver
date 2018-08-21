@@ -1,6 +1,6 @@
 {
   "name": "abhttpserver",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Simple HTTP Server Framework ",
   "main": "test.js",
   "scripts": {
@@ -15,7 +15,7 @@
     "https-server"
   ],
   "author": "andy.brunner@abdata.ch",
-  "license": "UNLICENSE",
+  "license": "Unlicense",
   "dependencies": {
     "express": "^4.16.3"
   },
