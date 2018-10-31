@@ -1,5 +1,14 @@
 # Revision History
 
+## Version 2.0.0 / xx-Nov-2018
+
+* Change: Major rebuild of ABHttpServer class to avoid using the Express framework as a prerequisite
+* Change: Created new self-signed certificate for localhost
+* Add: First parameter in all user method now contains an object ABRequest wth the request data
+* Add: Support added for HTTP/2 (only for HTTPS) with fallback to HTTP/1.1 for clients not supporting HTTP/2
+* Add: Support added for all IANA defined HTTP methods (total 39 methods)
+* Add: New method sendJSON() added
+
 ## Version 1.0.1 / 21-Aug-2018
 
 * Change: Ignore all calls after method terminate()
