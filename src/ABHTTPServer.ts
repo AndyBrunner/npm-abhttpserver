@@ -1,8 +1,13 @@
 import { Socket } from 'net'
 import { TLSSocket } from 'tls';
 import { IncomingMessage, ServerResponse } from 'http';
+import { Http2SecureServer } from 'http2';
 
-// Overall constants
+/**
+ * Simple HTTP Server Framework
+*/
+
+// Global constants
 const CLASSNAME = 'ABHttpServer'
 
 // Data collected at HTTP request time and passed to every user method
@@ -32,7 +37,7 @@ export type ABRequest = {
 }
 
 /**
- * Simple HTTP Server Framework
+ * Abstract class to be implemented/subclassed by the user
 */
 export abstract class ABHttpServer {
 
@@ -41,6 +46,24 @@ export abstract class ABHttpServer {
   private httpsServer: any        = null
   private httpHeaders: any        = {}
   private isActive: boolean       = false
+  
+  // Collect some HTTP statistics
+  private httpStatistics = {
+    request: {
+      http: {
+        count: 0,
+        bytes: 0,  
+      },
+      https: {
+        count: 0,
+        bytes: 0,
+      }
+    },
+    response: {
+      count: 0,
+      bytes: 0
+    }
+  }
 
   /**
    * Create the HTTP server
@@ -103,6 +126,27 @@ export abstract class ABHttpServer {
   }
 
   /**
+   * Return string of object
+   */
+  toString() {
+    let status: string = ''
+
+    status += `HTTP: ${this.httpServer? 'true' : 'false'}, `
+    status += `HTTPS: ${this.httpsServer ? 'true' : 'false'}, `
+    status += `Active: ${this.isActive? 'true' : 'false'}, `
+    status += `AB_DEBUG: ${this.DEBUG ? 'true' : 'false'}`
+    
+    return `${CLASSNAME}[${status}]`
+  }
+
+  /**
+   * Return the server statistics
+   */
+  getStatistics() {
+    return this.httpStatistics
+  }
+
+  /**
    * Establish server events and start the server
    * @param server  Server
    * @param port    TCP/IP port number
@@ -162,10 +206,10 @@ export abstract class ABHttpServer {
         this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server server received TLS resume session status request') : true
         callback()
       })
-      server.on('secureConnection', (tlsSocket: any) => {
+      server.on('secureConnection', (tlsSocket: TLSSocket) => {
         this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server completed TLS handshaking process') : true
       })
-      server.on('tlsClientError', (exception: Error, tlsSocket: any) => {
+      server.on('tlsClientError', (exception: Error, tlsSocket: TLSSocket) => {
         this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server received an error before successful connection') : true
       })
     }
@@ -179,6 +223,9 @@ export abstract class ABHttpServer {
   // Handle all HTTP/HTTPS requests
   private processHttpRequest(request: IncomingMessage, response: ServerResponse): void {
 
+    const url = require('url')
+    const { StringDecoder } = require('string_decoder')
+  
     // Supported HTTP methods based upon HTTP Method Registry at
     // http://www.iana.org/assignments/http-methods/http-methods.xhtml
     const httpMethods = {
@@ -222,10 +269,7 @@ export abstract class ABHttpServer {
       'updateredirectref': () => { this.updateredirectref(requestData, response) },
       'version-control': () => { this.versioncontrol(requestData, response) },
     }
-
-    const url = require('url')
-    const { StringDecoder } = require('string_decoder')
-
+  
     // Parse the url
     const parsedUrl = url.parse(request.url)
 
@@ -255,7 +299,7 @@ export abstract class ABHttpServer {
       }
     }
 
-    // Construct key/value object from HTTP querystring
+    // Construct key/value object from HTTP querystring (if present)
     if (parsedUrl.query) {
       let keyvalues = parsedUrl.query.split('&')
       for (let index = 0; index < keyvalues.length; index++) {
@@ -264,7 +308,7 @@ export abstract class ABHttpServer {
       }
     }
 
-    // Get the http payload (if any)
+    // Get the http payload (if present)
     const decoder = new StringDecoder('utf8')
 
     request.on('data', (dataChunk: string) => {
@@ -275,8 +319,20 @@ export abstract class ABHttpServer {
 
       this.DEBUG ? this.logDebug(`HTTP/${requestData.http.version} ${requestData.http.method.toUpperCase()} /${requestData.url.path}`) : true
       
-      // After we have collected all information, we now call the overwritten methods from the user
-      let methodFunction = (<any>httpMethods)[requestData.http.method]    //TODO
+      // Update statistics
+      if (requestData.http.tls) {
+        this.httpStatistics.request.https.count++
+        this.httpStatistics.request.https.bytes += requestData.http.data.length
+      } else {
+        this.httpStatistics.request.http.count++
+        this.httpStatistics.request.http.bytes += requestData.http.data.length
+      }
+      
+      // After we have collected all information, we now call the generic method to serve all HTTP requests
+      this.allMethods(requestData, response)
+
+      // Call the specific HTTP method function
+      let methodFunction = (<any>httpMethods)[requestData.http.method]
 
       if (typeof (methodFunction) == 'undefined') {
         let errorMessage = {
@@ -409,8 +465,12 @@ export abstract class ABHttpServer {
       return
     }
 
+    // Update the statistics
+    this.httpStatistics.response.count++
+    this.httpStatistics.response.bytes += text.length
+    
     // Send additional HTTP headers
-    if (!this.httpHeaders) {
+    if (this.httpHeaders) {
       for (let key in this.httpHeaders) {
         response.setHeader(key, this.httpHeaders[key])
       }
@@ -420,143 +480,49 @@ export abstract class ABHttpServer {
     response.end(text)
   }
 
-  /**
-   * Send HTTP 'Not Implemented' Error
-   * @param method 
-   * @param response ServerResponse
-   */
-  private notImplementedError(method: string, response: ServerResponse) {
-
-    let errorMessage = {
-      component: CLASSNAME,
-      error: `HTTP method ${method.toUpperCase()} ist not supported by the server - Missing subclass implementation`
-    }
-
-    this.DEBUG ? this.logDebug(errorMessage.error) : true
-
-    this.sendJSON(response, errorMessage, 501)
-  }
-
-  // Event prototypes which can be overwritten in subclass
+  // Event prototypes which can be implemented/overwritten by the users subclass
   clientConnect(socket: Socket) { }
   clientError(err: Error, socket: Socket) { }
 
-  // Method prototypes to be overwritten in subclass
-  acl(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  baselinecontrol(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  bind(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  checkin(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  checkout(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  connect(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  copy(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  delete(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  get(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  head(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  label(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  link(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  lock(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  merge(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  mkactivity(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  mkcalendar(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  mkcol(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  mkredirectref(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  mkworkspace(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  move(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  options(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  orderpatch(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  patch(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  post(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  pri(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  propfind(request: ABRequest, response: ServerResponse) { 
-    this.notImplementedError(request.http.method, response)
-  }
-  proppatch(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  put(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  rebind(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  report(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  search(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  trace(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  unbind(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  uncheckout(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  unlink(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  unlock(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  update(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  updateredirectref(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
-  versioncontrol(request: ABRequest, response: ServerResponse) {
-    this.notImplementedError(request.http.method, response)
-  }
+  // HTTP methods which can be implemented/overwritten by the users subclass
+  allMethods(request: ABRequest, response: ServerResponse) {}
+  acl(request: ABRequest, response: ServerResponse) {}
+  baselinecontrol(request: ABRequest, response: ServerResponse) {}
+  bind(request: ABRequest, response: ServerResponse) {}
+  checkin(request: ABRequest, response: ServerResponse) {}
+  checkout(request: ABRequest, response: ServerResponse) {}
+  connect(request: ABRequest, response: ServerResponse) {}
+  copy(request: ABRequest, response: ServerResponse) {}
+  delete(request: ABRequest, response: ServerResponse) {}
+  get(request: ABRequest, response: ServerResponse) {}
+  head(request: ABRequest, response: ServerResponse) {}
+  label(request: ABRequest, response: ServerResponse) {}
+  link(request: ABRequest, response: ServerResponse) {}
+  lock(request: ABRequest, response: ServerResponse) {}
+  merge(request: ABRequest, response: ServerResponse) {}
+  mkactivity(request: ABRequest, response: ServerResponse) {}
+  mkcalendar(request: ABRequest, response: ServerResponse) {}
+  mkcol(request: ABRequest, response: ServerResponse) {}
+  mkredirectref(request: ABRequest, response: ServerResponse) {}
+  mkworkspace(request: ABRequest, response: ServerResponse) {}
+  move(request: ABRequest, response: ServerResponse) {}
+  options(request: ABRequest, response: ServerResponse) {}
+  orderpatch(request: ABRequest, response: ServerResponse) {}
+  patch(request: ABRequest, response: ServerResponse) {}
+  post(request: ABRequest, response: ServerResponse) {}
+  pri(request: ABRequest, response: ServerResponse) {}
+  propfind(request: ABRequest, response: ServerResponse) {}
+  proppatch(request: ABRequest, response: ServerResponse) {}
+  put(request: ABRequest, response: ServerResponse) {}
+  rebind(request: ABRequest, response: ServerResponse) {}
+  report(request: ABRequest, response: ServerResponse) {}
+  search(request: ABRequest, response: ServerResponse) {}
+  trace(request: ABRequest, response: ServerResponse) {}
+  unbind(request: ABRequest, response: ServerResponse) {}
+  uncheckout(request: ABRequest, response: ServerResponse) {}
+  unlink(request: ABRequest, response: ServerResponse) {}
+  unlock(request: ABRequest, response: ServerResponse) {}
+  update(request: ABRequest, response: ServerResponse) {}
+  updateredirectref(request: ABRequest, response: ServerResponse) {}
+  versioncontrol(request: ABRequest, response: ServerResponse) {}
 }

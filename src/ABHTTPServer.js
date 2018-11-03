@@ -1,10 +1,13 @@
 "use strict";
 exports.__esModule = true;
 var tls_1 = require("tls");
-// Overall constants
-var CLASSNAME = 'ABHttpServer';
 /**
  * Simple HTTP Server Framework
+*/
+// Global constants
+var CLASSNAME = 'ABHttpServer';
+/**
+ * Abstract class to be implemented/subclassed by the user
 */
 var ABHttpServer = /** @class */ (function () {
     /**
@@ -21,6 +24,23 @@ var ABHttpServer = /** @class */ (function () {
         this.httpsServer = null;
         this.httpHeaders = {};
         this.isActive = false;
+        // Collect some HTTP statistics
+        this.httpStatistics = {
+            request: {
+                http: {
+                    count: 0,
+                    bytes: 0
+                },
+                https: {
+                    count: 0,
+                    bytes: 0
+                }
+            },
+            response: {
+                count: 0,
+                bytes: 0
+            }
+        };
         this.DEBUG ? this.logDebug("Constructor called (" + httpPort + ", " + httpsPort + ")") : true;
         var http = require('http');
         var https = require('http2');
@@ -63,6 +83,23 @@ var ABHttpServer = /** @class */ (function () {
         // Mark server active
         this.isActive = true;
     }
+    /**
+     * Return string of object
+     */
+    ABHttpServer.prototype.toString = function () {
+        var status = '';
+        status += "HTTP: " + (this.httpServer ? 'true' : 'false') + ", ";
+        status += "HTTPS: " + (this.httpsServer ? 'true' : 'false') + ", ";
+        status += "Active: " + (this.isActive ? 'true' : 'false') + ", ";
+        status += "AB_DEBUG: " + (this.DEBUG ? 'true' : 'false');
+        return CLASSNAME + "[" + status + "]";
+    };
+    /**
+     * Return the server statistics
+     */
+    ABHttpServer.prototype.getStatistics = function () {
+        return this.httpStatistics;
+    };
     /**
      * Establish server events and start the server
      * @param server  Server
@@ -136,6 +173,8 @@ var ABHttpServer = /** @class */ (function () {
     // Handle all HTTP/HTTPS requests
     ABHttpServer.prototype.processHttpRequest = function (request, response) {
         var _this = this;
+        var url = require('url');
+        var StringDecoder = require('string_decoder').StringDecoder;
         // Supported HTTP methods based upon HTTP Method Registry at
         // http://www.iana.org/assignments/http-methods/http-methods.xhtml
         var httpMethods = {
@@ -179,8 +218,6 @@ var ABHttpServer = /** @class */ (function () {
             'updateredirectref': function () { _this.updateredirectref(requestData, response); },
             'version-control': function () { _this.versioncontrol(requestData, response); }
         };
-        var url = require('url');
-        var StringDecoder = require('string_decoder').StringDecoder;
         // Parse the url
         var parsedUrl = url.parse(request.url);
         // Build a container holding all the data of the request
@@ -208,7 +245,7 @@ var ABHttpServer = /** @class */ (function () {
                 'query': {}
             }
         };
-        // Construct key/value object from HTTP querystring
+        // Construct key/value object from HTTP querystring (if present)
         if (parsedUrl.query) {
             var keyvalues = parsedUrl.query.split('&');
             for (var index = 0; index < keyvalues.length; index++) {
@@ -216,7 +253,7 @@ var ABHttpServer = /** @class */ (function () {
                 requestData.url.query[keyvalue[0]] = keyvalue[1];
             }
         }
-        // Get the http payload (if any)
+        // Get the http payload (if present)
         var decoder = new StringDecoder('utf8');
         request.on('data', function (dataChunk) {
             requestData.http.data += decoder.write(dataChunk);
@@ -224,8 +261,19 @@ var ABHttpServer = /** @class */ (function () {
         request.on('end', function () {
             requestData.http.data += decoder.end();
             _this.DEBUG ? _this.logDebug("HTTP/" + requestData.http.version + " " + requestData.http.method.toUpperCase() + " /" + requestData.url.path) : true;
-            // After we have collected all information, we now call the overwritten methods from the user
-            var methodFunction = httpMethods[requestData.http.method]; //TODO
+            // Update statistics
+            if (requestData.http.tls) {
+                _this.httpStatistics.request.https.count++;
+                _this.httpStatistics.request.https.bytes += requestData.http.data.length;
+            }
+            else {
+                _this.httpStatistics.request.http.count++;
+                _this.httpStatistics.request.http.bytes += requestData.http.data.length;
+            }
+            // After we have collected all information, we now call the generic method to serve all HTTP requests
+            _this.allMethods(requestData, response);
+            // Call the specific HTTP method function
+            var methodFunction = httpMethods[requestData.http.method];
             if (typeof (methodFunction) == 'undefined') {
                 var errorMessage = {
                     component: CLASSNAME,
@@ -343,8 +391,11 @@ var ABHttpServer = /** @class */ (function () {
         if (!this.isActive) {
             return;
         }
+        // Update the statistics
+        this.httpStatistics.response.count++;
+        this.httpStatistics.response.bytes += text.length;
         // Send additional HTTP headers
-        if (!this.httpHeaders) {
+        if (this.httpHeaders) {
             for (var key in this.httpHeaders) {
                 response.setHeader(key, this.httpHeaders[key]);
             }
@@ -352,140 +403,50 @@ var ABHttpServer = /** @class */ (function () {
         response.writeHead(httpStatus, { 'Content-Type': mimeType });
         response.end(text);
     };
-    /**
-     * Send HTTP 'Not Implemented' Error
-     * @param method
-     * @param response ServerResponse
-     */
-    ABHttpServer.prototype.notImplementedError = function (method, response) {
-        var errorMessage = {
-            component: CLASSNAME,
-            error: "HTTP method " + method.toUpperCase() + " ist not supported by the server - Missing subclass implementation"
-        };
-        this.DEBUG ? this.logDebug(errorMessage.error) : true;
-        this.sendJSON(response, errorMessage, 501);
-    };
-    // Event prototypes which can be overwritten in subclass
+    // Event prototypes which can be implemented/overwritten by the users subclass
     ABHttpServer.prototype.clientConnect = function (socket) { };
     ABHttpServer.prototype.clientError = function (err, socket) { };
-    // Method prototypes to be overwritten in subclass
-    ABHttpServer.prototype.acl = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.baselinecontrol = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.bind = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.checkin = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.checkout = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.connect = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.copy = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype["delete"] = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.get = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.head = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.label = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.link = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.lock = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.merge = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.mkactivity = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.mkcalendar = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.mkcol = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.mkredirectref = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.mkworkspace = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.move = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.options = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.orderpatch = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.patch = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.post = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.pri = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.propfind = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.proppatch = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.put = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.rebind = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.report = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.search = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.trace = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.unbind = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.uncheckout = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.unlink = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.unlock = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.update = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.updateredirectref = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
-    ABHttpServer.prototype.versioncontrol = function (request, response) {
-        this.notImplementedError(request.http.method, response);
-    };
+    // HTTP methods which can be implemented/overwritten by the users subclass
+    ABHttpServer.prototype.allMethods = function (request, response) { };
+    ABHttpServer.prototype.acl = function (request, response) { };
+    ABHttpServer.prototype.baselinecontrol = function (request, response) { };
+    ABHttpServer.prototype.bind = function (request, response) { };
+    ABHttpServer.prototype.checkin = function (request, response) { };
+    ABHttpServer.prototype.checkout = function (request, response) { };
+    ABHttpServer.prototype.connect = function (request, response) { };
+    ABHttpServer.prototype.copy = function (request, response) { };
+    ABHttpServer.prototype["delete"] = function (request, response) { };
+    ABHttpServer.prototype.get = function (request, response) { };
+    ABHttpServer.prototype.head = function (request, response) { };
+    ABHttpServer.prototype.label = function (request, response) { };
+    ABHttpServer.prototype.link = function (request, response) { };
+    ABHttpServer.prototype.lock = function (request, response) { };
+    ABHttpServer.prototype.merge = function (request, response) { };
+    ABHttpServer.prototype.mkactivity = function (request, response) { };
+    ABHttpServer.prototype.mkcalendar = function (request, response) { };
+    ABHttpServer.prototype.mkcol = function (request, response) { };
+    ABHttpServer.prototype.mkredirectref = function (request, response) { };
+    ABHttpServer.prototype.mkworkspace = function (request, response) { };
+    ABHttpServer.prototype.move = function (request, response) { };
+    ABHttpServer.prototype.options = function (request, response) { };
+    ABHttpServer.prototype.orderpatch = function (request, response) { };
+    ABHttpServer.prototype.patch = function (request, response) { };
+    ABHttpServer.prototype.post = function (request, response) { };
+    ABHttpServer.prototype.pri = function (request, response) { };
+    ABHttpServer.prototype.propfind = function (request, response) { };
+    ABHttpServer.prototype.proppatch = function (request, response) { };
+    ABHttpServer.prototype.put = function (request, response) { };
+    ABHttpServer.prototype.rebind = function (request, response) { };
+    ABHttpServer.prototype.report = function (request, response) { };
+    ABHttpServer.prototype.search = function (request, response) { };
+    ABHttpServer.prototype.trace = function (request, response) { };
+    ABHttpServer.prototype.unbind = function (request, response) { };
+    ABHttpServer.prototype.uncheckout = function (request, response) { };
+    ABHttpServer.prototype.unlink = function (request, response) { };
+    ABHttpServer.prototype.unlock = function (request, response) { };
+    ABHttpServer.prototype.update = function (request, response) { };
+    ABHttpServer.prototype.updateredirectref = function (request, response) { };
+    ABHttpServer.prototype.versioncontrol = function (request, response) { };
     return ABHttpServer;
 }());
 exports.ABHttpServer = ABHttpServer;

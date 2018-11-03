@@ -26,7 +26,7 @@ export declare type ABRequest = {
     };
 };
 /**
- * Simple HTTP Server Framework
+ * Abstract class to be implemented/subclassed by the user
 */
 export declare abstract class ABHttpServer {
     private DEBUG;
@@ -34,12 +34,36 @@ export declare abstract class ABHttpServer {
     private httpsServer;
     private httpHeaders;
     private isActive;
+    private httpStatistics;
     /**
      * Create the HTTP server
      * @param httpPort Port number (1 - 65535) for the HTTP server or 0
      * @param httpsPort Port number (1 - 65535) for the HTTPS server or 0
      */
     constructor(httpPort?: number, httpsPort?: number);
+    /**
+     * Return string of object
+     */
+    toString(): string;
+    /**
+     * Return the server statistics
+     */
+    getStatistics(): {
+        request: {
+            http: {
+                count: number;
+                bytes: number;
+            };
+            https: {
+                count: number;
+                bytes: number;
+            };
+        };
+        response: {
+            count: number;
+            bytes: number;
+        };
+    };
     /**
      * Establish server events and start the server
      * @param server  Server
@@ -102,14 +126,9 @@ export declare abstract class ABHttpServer {
      * @param httpStatus    HTTP Status code (default = 200)
      */
     private sendData;
-    /**
-     * Send HTTP 'Not Implemented' Error
-     * @param method
-     * @param response ServerResponse
-     */
-    private notImplementedError;
     clientConnect(socket: Socket): void;
     clientError(err: Error, socket: Socket): void;
+    allMethods(request: ABRequest, response: ServerResponse): void;
     acl(request: ABRequest, response: ServerResponse): void;
     baselinecontrol(request: ABRequest, response: ServerResponse): void;
     bind(request: ABRequest, response: ServerResponse): void;

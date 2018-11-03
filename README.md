@@ -10,10 +10,7 @@ npm install abhttpserver
 
 ## Usage
 
-This example starts two servers (HTTP on port 8080 and HTTPS on port 8081). Both are handled thru the
-appriopriate methods.
-
-Example test.ts:
+Simple HelloWorld example:
 
 ```typescript
 import { ABHttpServer, ABRequest} from './ABHttpServer'
@@ -21,10 +18,33 @@ import { ServerResponse } from 'http';
 
 class MyServer extends ABHttpServer {
   get(request: ABRequest, response: ServerResponse) {
-    this.sendText(response, `Hello - The URL sent was ${request.url.path}`)
+    this.sendText(response, `Hello world!`)
+  }
+}
+var myServer = new MyServer(8080)
+```
+
+Example test.ts:
+
+This example starts two servers (HTTP:8080 and HTTPS:8081). All requests from both servers are handled thru the same class methods. The optional allMethods() function will be called before any corresponding HTTP method function.
+
+```typescript
+import { ABHttpServer, ABRequest} from './ABHttpServer'
+import { ServerResponse } from 'http';
+
+class MyServer extends ABHttpServer {
+  allMethods(request: ABRequest, response: ServerResponse) {
+    console.log(`Host ${request.client.address} sent ${request.http.method.toUpperCase()} request`)
+  }
+  get(request: ABRequest, response: ServerResponse) {
+    if (request.url.path == 'stats') {
+      this.sendJSON(response, this.getStatistics())
+    } else {
+      this.sendText(response, `The URL sent was ${request.url.path}`)
+    }
   }
   post(request: ABRequest, response: ServerResponse) {
-    this.sendJSON(response, { data: `The data sent was ${request.http.data}` })
+    this.sendJSON(response, { data: `The raw data sent was ${request.http.data}` })
   }
 }
 var myServer = new MyServer(8080, 8081)
@@ -36,7 +56,7 @@ var myServer = new MyServer(8080, 8081)
 * Includes several methods for easy access to the received and sending data.
 * The HTTPS server certificate and the trusted certificate chain are read from "key.pem" and
   "cert.pem". A self signed certificate is included for testing purpose.
-* Detailed debugging information for HTTP events and data received/sent.
+* Detailed debugging information for HTTP events and data received and sent.
 
 ## Debugging
 

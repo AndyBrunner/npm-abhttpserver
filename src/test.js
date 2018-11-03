@@ -20,11 +20,19 @@ var MyServer = /** @class */ (function (_super) {
     function MyServer() {
         return _super !== null && _super.apply(this, arguments) || this;
     }
+    MyServer.prototype.allMethods = function (request, response) {
+        console.log("Host " + request.client.address + " sent " + request.http.method.toUpperCase() + " request");
+    };
     MyServer.prototype.get = function (request, response) {
-        this.sendText(response, "Hello - The URL sent was " + request.url.path);
+        if (request.url.path == 'stats') {
+            this.sendJSON(response, this.getStatistics());
+        }
+        else {
+            this.sendText(response, "The URL sent was " + request.url.path);
+        }
     };
     MyServer.prototype.post = function (request, response) {
-        this.sendJSON(response, { data: "The data sent was " + request.http.data });
+        this.sendJSON(response, { data: "The raw data sent was " + request.http.data });
     };
     return MyServer;
 }(ABHttpServer_1.ABHttpServer));
