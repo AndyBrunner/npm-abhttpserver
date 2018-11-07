@@ -12,6 +12,8 @@ npm install abhttpserver
 
 Simple HelloWorld example:
 
+This example starts an HTTP server on port 8080 which responds every client request with "Hello world!".
+
 ```typescript
 import { ABHttpServer, ABRequest} from './ABHttpServer'
 import { ServerResponse } from 'http';
@@ -26,22 +28,22 @@ var myServer = new MyServer(8080)
 
 Example test.ts:
 
-This example starts two servers (HTTP:8080 and HTTPS:8081). All requests from both servers are handled thru the same class methods. The optional allMethods() function will be called before any corresponding HTTP method function.
+This example starts two servers (HTTP:8080 and HTTPS:8081). All requests from both servers are handled thru the same class methods.
+
+* For GET requests with an URL /stats, the server sends back a JSON object with some server statistic, all other GET requests will receive a text line with the send URL.
+* All POST requests will be answered with the data sent with the POST request.
 
 ```typescript
 import { ABHttpServer, ABRequest} from './ABHttpServer'
 import { ServerResponse } from 'http';
 
 class MyServer extends ABHttpServer {
-  allMethods(request: ABRequest, response: ServerResponse) {
-    console.log(`Host ${request.client.address} sent ${request.http.method.toUpperCase()} request`)
-  }
   get(request: ABRequest, response: ServerResponse) {
     if (request.url.path == 'stats') {
       this.sendJSON(response, this.getStatistics())
     } else {
       this.sendText(response, `The URL sent was ${request.url.path}`)
-    }
+    } 
   }
   post(request: ABRequest, response: ServerResponse) {
     this.sendJSON(response, { data: `The raw data sent was ${request.http.data}` })
@@ -69,21 +71,21 @@ AB_DEBUG=true node test.js
 Example debug output:
 
 ```text
-2018-10-31 10:52:00.488 ABHttpServer Constructor called (8080, 8081)
-2018-10-31 10:52:00.498 ABHttpServer Creating HTTP server on port 8080
-2018-10-31 10:52:00.503 ABHttpServer Creating HTTPS server on port 8081
-2018-10-31 10:52:00.512 ABHttpServer HTTP net.Server server is in listen mode
-2018-10-31 10:52:00.512 ABHttpServer HTTP server started on port 8080
-2018-10-31 10:52:00.512 ABHttpServer HTTPS net.Server server is in listen mode
-2018-10-31 10:52:00.512 ABHttpServer HTTPS server started on port 8081
-2018-10-31 10:52:05.086 ABHttpServer HTTP http.Server server established connection
-2018-10-31 10:52:05.092 ABHttpServer HTTP http.Server server received client request
-2018-10-31 10:52:05.094 ABHttpServer HTTP/1.1 POST /test
-2018-10-31 10:52:05.094 ABHttpServer Sending HTTP status 200 with 41 bytes of application/json data
-2018-10-31 10:52:28.006 ABHttpServer HTTP http.Server server established connection
-2018-10-31 10:52:28.009 ABHttpServer HTTP http.Server server received client request
-2018-10-31 10:52:28.009 ABHttpServer HTTP/1.1 GET /test
-2018-10-31 10:52:28.009 ABHttpServer Sending HTTP status 200 with 29 bytes of text/plain data
+2018-11-07T16:38:24.205Z ABHttpServer: Object constructor called (8080, 8081)
+2018-11-07T16:38:24.214Z ABHttpServer: Creating HTTP server on port 8080
+2018-11-07T16:38:24.219Z ABHttpServer: Creating HTTPS server on port 8081
+2018-11-07T16:38:24.228Z ABHttpServer: HTTP net.Server server is in listen mode
+2018-11-07T16:38:24.228Z ABHttpServer: HTTP server started on port 8080
+2018-11-07T16:38:24.228Z ABHttpServer: HTTPS net.Server server is in listen mode
+2018-11-07T16:38:24.228Z ABHttpServer: HTTPS server started on port 8081
+2018-11-07T16:38:47.103Z ABHttpServer: HTTP http.Server server established connection
+2018-11-07T16:38:47.107Z ABHttpServer: HTTP http.Server server received client request
+2018-11-07T16:38:47.108Z ABHttpServer: <= HTTP/1.1 (Non-TLS) - Method GET - URL /SomePath - Content-Length 0
+2018-11-07T16:38:47.108Z ABHttpServer: => HTTP Status 200 - Content-Length 25 - Content-Type text/plain
+2018-11-07T16:39:07.821Z ABHttpServer: HTTP http.Server server established connection
+2018-11-07T16:39:07.822Z ABHttpServer: HTTP http.Server server received client request
+2018-11-07T16:39:07.822Z ABHttpServer: <= HTTP/1.1 (Non-TLS) - Method POST - URL /SomeOtherPath - Content-Length 12
+2018-11-07T16:39:07.822Z ABHttpServer: => HTTP Status 200 - Content-Length 45 - Content-Type application/json
 ```
 
 ## Notes

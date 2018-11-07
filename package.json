@@ -1,11 +1,11 @@
 {
   "name": "abhttpserver",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Simple HTTP Server Framework ",
   "main": "test.js",
   "scripts": {
     "run": "node src/test.js",
-    "debug": "AB_DEBUG=true node src/test.js",
+    "debug": "cd src && AB_DEBUG=true node test.js",
     "edit": "code . && tsc src/*.ts -w --declaration --declarationDir ./typings"
   },
   "keywords": [

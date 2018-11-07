@@ -20,9 +20,6 @@ var MyServer = /** @class */ (function (_super) {
     function MyServer() {
         return _super !== null && _super.apply(this, arguments) || this;
     }
-    MyServer.prototype.allMethods = function (request, response) {
-        console.log("Host " + request.client.address + " sent " + request.http.method.toUpperCase() + " request");
-    };
     MyServer.prototype.get = function (request, response) {
         if (request.url.path == 'stats') {
             this.sendJSON(response, this.getStatistics());

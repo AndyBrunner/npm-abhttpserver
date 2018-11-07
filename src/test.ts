@@ -4,9 +4,6 @@ import { ABHttpServer, ABRequest} from './ABHttpServer'
 import { ServerResponse } from 'http';
 
 class MyServer extends ABHttpServer {
-  allMethods(request: ABRequest, response: ServerResponse) {
-    console.log(`Host ${request.client.address} sent ${request.http.method.toUpperCase()} request`)
-  }
   get(request: ABRequest, response: ServerResponse) {
     if (request.url.path == 'stats') {
       this.sendJSON(response, this.getStatistics())

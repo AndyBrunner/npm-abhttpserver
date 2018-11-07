@@ -1,5 +1,17 @@
 # Revision History
 
+## Version 2.0.2 / 07-Nov-2018
+
+* Add: Include method sendFile() to return content of a static file
+* Add: Set 'Content-Length' and 'Server' in HTTP response
+* Add: Set 'time' and 'httpStatus' in error JSON objects
+* Change: Deleted the allMethods() method due to inconsistencies
+* Change: Use ISO timestamp in debug console output
+* Change: Add more information in debug console output
+* Change: RequestData.url.path is now URI decoded and trimmed
+* Change: Add ABHttpServer version number to ABRequest object
+* Change: Overall code cleanup
+
 ## Version 2.0.1 / 03-Nov-2018
 
 * Add: Include method toString() to write out ABHttpServer object

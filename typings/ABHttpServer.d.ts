@@ -1,7 +1,8 @@
 /// <reference types="node" />
-import { Socket } from 'net';
 import { ServerResponse } from 'http';
+import { Socket } from 'net';
 export declare type ABRequest = {
+    'version': string;
     'server': {
         'address': string;
         'port': string;
@@ -37,77 +38,87 @@ export declare abstract class ABHttpServer {
     private httpStatistics;
     /**
      * Create the HTTP server
-     * @param httpPort Port number (1 - 65535) for the HTTP server or 0
-     * @param httpsPort Port number (1 - 65535) for the HTTPS server or 0
+     * @param {httpPort} Port number (1 - 65535) for the HTTP server or 0
+     * @param {httpsPort} Port number (1 - 65535) for the HTTPS server or 0
      */
     constructor(httpPort?: number, httpsPort?: number);
     /**
      * Return string of object
+     * @param {-}
+     * @returns {string} String representation of object
      */
     toString(): string;
     /**
      * Return the server statistics
+     * @param {-}
+     * @returns {statistics} JSON object with server statistics
      */
-    getStatistics(): {
-        request: {
-            http: {
-                count: number;
-                bytes: number;
-            };
-            https: {
-                count: number;
-                bytes: number;
-            };
-        };
-        response: {
-            count: number;
-            bytes: number;
-        };
-    };
+    getStatistics(): any;
     /**
      * Establish server events and start the server
-     * @param server  Server
-     * @param port    TCP/IP port number
-     * @param secure  TLS flag (default = false)
+     * @param {server}  Server
+     * @param {port}    TCP/IP port number
+     * @param {secure}  TLS flag (default = false)
      */
     private startServer;
+    /**
+     * Handle all HTTP requests
+     * @param {request}   IncomingMessage object
+     * @param {response}  ServerResponse object
+     */
     private processHttpRequest;
     /**
     * Write debugging data to the console
-    * @param message Debug message to be written
+    * @param {message}  Debug message to be written
     */
     private logDebug;
     /**
-     * Right pad number
-     * @param value
-     * @param digits
-     */
-    private dateTimePad;
-    /**
      * Terminate the HTTP/HTTPS server
+     * @param {-}
      */
     terminate(): void;
     /**
      * Sends HTML data to the client
-     * @param response    ServerResponse object
-     * @param text        HTML to be sent
-     * @param httpStatus  HTTP Status code (defaults to 200)
+     * @param {response}    ServerResponse object
+     * @param {text}        HTML to be sent
+     * @param {httpStatus}  HTTP Status code (defaults to 200)
      */
     sendHTML(response: ServerResponse, text: string, httpStatus?: number): void;
     /**
      * Sends plain text to the client
-     * @param response
-     * @param text      Text to be sent
-     * @param httpStatus  HTTP Status code (defaults to 200)
+     * @param {response}    ServerResponse object
+     * @param {text}        Text to be sent
+     * @param {httpStatus}  HTTP status code (defaults to 200)
      */
     sendText(response: ServerResponse, text: string, httpStatus?: number): void;
     /**
-     * Sends json text to the client
-     * @param response
-     * @param jsonData    JSON data to be sent
-     * @param httpStatus  HTTP Status code (defaults to 200)
+     * Sends JSON data to the client
+     * @param {response}    ServerResponse object
+     * @param {jsonData}    JSON data to be sent
+     * @param {httpStatus}  HTTP status code (defaults to 200)
      */
     sendJSON(response: ServerResponse, jsonData: {}, httpStatus?: number): void;
+    /**
+     * Sends error message as JSON object to the client
+     * @param {response}      ServerResponse object
+     * @param {errorMessage}  Error message
+     * @param {httpStatus}    HTTP status code (defaults to 200)
+     */
+    private sendError;
+    /**
+     * Sends not-implemented error message to the client
+     * @param {request}       ABRequest object
+     * @param {response}      ServerResponse object
+     */
+    private sendNotImplementedError;
+    /**
+     * Send the specified file to the client
+     * @param {response}    ServerResponse object
+     * @param {filePath}    File name with path
+     * @param {fileRoot}    Check sanitized path with this root directory, defaults to __dirname
+     * @param {mimeType}    MIME Type, default is set based on file name extension
+     */
+    sendFile(response: ServerResponse, filePath: string, fileRoot?: string, mimeType?: string): void;
     /**
      * Set HTTP headers to be added to every response
      *
@@ -115,20 +126,19 @@ export declare abstract class ABHttpServer {
      * this.setHeaders({'Access-Control-Allow-Origin': '*',
      *                  'Access-Control-Allow-Methods': 'GET, POST, DELETE, PUT' })
      *
-     * @param httpHeaders HTTP Headers to be added
+     * @param {httpHeaders} HTTP Headers to be added
      */
     setHeaders(httpHeaders: {}): void;
     /**
-     * Writes the data with HTTP header
-     * @param response      ServerResponse
-     * @param mimeType      HTTP Content-Type
-     * @param text          Data to be written
-     * @param httpStatus    HTTP Status code (default = 200)
+     * Writes the data with HTTP headers
+     * @param {response}      ServerResponse
+     * @param {mimeType}      HTTP Content-Type
+     * @param {text}          Data to be written
+     * @param {httpStatus}    HTTP Status code (default = 200)
      */
     private sendData;
-    clientConnect(socket: Socket): void;
     clientError(err: Error, socket: Socket): void;
-    allMethods(request: ABRequest, response: ServerResponse): void;
+    shutdown(): void;
     acl(request: ABRequest, response: ServerResponse): void;
     baselinecontrol(request: ABRequest, response: ServerResponse): void;
     bind(request: ABRequest, response: ServerResponse): void;
