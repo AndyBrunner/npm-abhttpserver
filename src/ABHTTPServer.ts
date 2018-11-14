@@ -8,13 +8,13 @@ import { Stats } from 'fs';
 */
 
 // Global constants
-const CLASSNAME = 'ABHttpServer'
-const VERSION = '2.0.2'           //TODO: Class version number
+const CLASSNAME: string = 'ABHttpServer'
+const VERSION: string   = '2.1.0'           //TODO: Class version number
 
-// Data collected at HTTP request time and passed to every user method
+// Define request object to be passed to every user method
 export type ABRequest = {
-  'version': string,
   'server': {
+    'hostname': string,
     'address': string,
     'port': string,
   },
@@ -25,6 +25,8 @@ export type ABRequest = {
   'http': {
     'version': string,
     'tls': boolean,
+    'tlsVersion': string,
+    'tlsCipher': string,
     'method': string,
     'headers': {},
     'data': string,
@@ -43,14 +45,28 @@ export type ABRequest = {
 */
 export abstract class ABHttpServer {
 
-  private DEBUG: boolean = (process.env.AB_DEBUG === 'true') ? true : false
-  private httpServer: any = null
-  private httpsServer: any = null
-  private httpHeaders: any = {}
+  private DEBUG: boolean    = (process.env.AB_DEBUG === 'true') ? true : false
+  private httpServer: any   = null
+  private httpsServer: any  = null
+  private httpHeaders: any  = {}
   private isActive: boolean = false
-  
-  // Collect some HTTP statistics
+
+  // Server statistics object to be returned to the user via getStatistics()
   private httpStatistics = {
+    server: {
+      className: CLASSNAME,
+      classVersion: VERSION,
+      startTime: new Date().toISOString(),
+      startArguments: process.argv,
+      nodeVersion: process.version,
+      hostname: '',
+      osPlatform: '',
+      osType: '',
+      osRelease: '',
+      cpuArchitecture: '',
+      cpuUsageUserSec: 0.0,
+      cpuUsageSystemSec: 0.0
+    },
     request: {
       http: {
         count: 0,
@@ -71,6 +87,7 @@ export abstract class ABHttpServer {
    * Create the HTTP server
    * @param {httpPort} Port number (1 - 65535) for the HTTP server or 0
    * @param {httpsPort} Port number (1 - 65535) for the HTTPS server or 0
+   * @returns {ABHttpServer} Object
    */
   constructor(httpPort: number = 0, httpsPort: number = 0) {
 
@@ -80,21 +97,29 @@ export abstract class ABHttpServer {
     const https = require('http2')
     const fs = require('fs')
     const path = require('path')
+    const os = require('os') 
    
+    // Complete statistic object
+    this.httpStatistics.server.hostname = os.hostname()
+    this.httpStatistics.server.cpuArchitecture = os.arch()
+    this.httpStatistics.server.osPlatform = os.platform()
+    this.httpStatistics.server.osType = os.type()
+    this.httpStatistics.server.osRelease = os.release()
+      
     // Check constructor arguments
     if (arguments[0] < 0 || arguments[0] > 65535 || arguments[1] < 0 || arguments[1] > 65535) {
-      throw new RangeError(CLASSNAME + ': Both port arguments must be between 0 and 65535')
+      throw new RangeError(`${CLASSNAME}: Both port arguments must be between 0 and 65535`)
     }
     if (arguments[0] % 1 !== 0 || arguments[1] % 1 !== 0) {
-      throw new RangeError(CLASSNAME + ': Both port arguments must have integer values')
+      throw new RangeError(`${CLASSNAME}: Both port arguments must have integer values`)
     }
     if (arguments[0] === arguments[1]) {
-      throw new RangeError(CLASSNAME + ': Both ports must not be equal')
+      throw new RangeError(`${CLASSNAME}: Both ports must not be equal`)
     }
     if (arguments[0] === 0 && arguments[1] === 0) {
-      throw new RangeError(CLASSNAME + ': At least one port must be non-zero')
+      throw new RangeError(`${CLASSNAME}: At least one port must be non-zero`)
     }
-    
+        
     // Start the HTTP server
     if (httpPort !== 0) {
 
@@ -120,7 +145,7 @@ export abstract class ABHttpServer {
       this.httpsServer = https.createSecureServer(httpsOptions, (request: IncomingMessage, response: ServerResponse) => {
         this.processHttpRequest(request, response)
       })
-      this.startServer(this.httpsServer, httpsPort, true)
+      this.startServer(this.httpsServer, httpsPort)
     }
 
     // Mark server active
@@ -130,11 +155,12 @@ export abstract class ABHttpServer {
   /**
    * Return string of object
    * @param {-}
-   * @returns {string} String representation of object
+   * @returns {string} String representation of ABHttpServer object
    */
   toString(): string {
     let status: string = ''
 
+    status += `Hostname: ${this.httpStatistics.server.hostname}, `
     status += `HTTP: ${this.httpServer ? 'true' : 'false'}, `
     status += `HTTPS: ${this.httpsServer ? 'true' : 'false'}, `
     status += `Active: ${this.isActive ? 'true' : 'false'}, `
@@ -148,7 +174,14 @@ export abstract class ABHttpServer {
    * @param {-}
    * @returns {statistics} JSON object with server statistics
    */
-  getStatistics(): any {
+  getStatistics(): {} {
+
+    // Update statistics
+    const cpuUsage = process.cpuUsage()
+
+    this.httpStatistics.server.cpuUsageUserSec = cpuUsage.user / 1000000
+    this.httpStatistics.server.cpuUsageSystemSec = cpuUsage.system / 1000000
+
     return this.httpStatistics
   }
 
@@ -156,75 +189,84 @@ export abstract class ABHttpServer {
    * Establish server events and start the server
    * @param {server}  Server
    * @param {port}    TCP/IP port number
-   * @param {secure}  TLS flag (default = false)
    */
-  private startServer(server: any, port: number, secure: boolean = false): void {
+  private startServer(server: any, port: number): void {
 
-    // Establish server event
-    server.on('clientError', (err: Error, socket: Socket) => {
-      this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ` http.Server client error: ${err}`) : true
-      this.clientError(err, socket)
+    // Get TLS state
+    const tlsConnection: boolean = (server.constructor.name === 'Http2SecureServer') ? true : false
+      
+    // Establish <net.Server/http.Server> events
+    server.on('checkContinue', (request: IncomingMessage, response: ServerResponse) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} "100-continue" received`) : true
+    })
+    server.on('checkExpectation', (request: IncomingMessage, response: ServerResponse) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} expect header received`) : true
+    })
+    server.on('clientError', (error: Error, socket: Socket) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client error: ${error}`) : true
+      this.clientError(error, socket)
+    })
+    server.on('close', () => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server closed`) : true
+    })
+    server.on('connect', (request: IncomingMessage, socket: Socket, head: Buffer) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client connect received`) : true
+    })
+    server.on('connection', (socket: Socket) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client connected`) : true
+    })
+    server.on('error', (error: Error) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} error received: ${error}`) : true
+    })
+    server.on('listening', () => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server is listening`) : true
+    })
+    server.on('request', (request: IncomingMessage, response: ServerResponse) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client request received`) : true
+    })
+    server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client upgrade received`) : true
     })
 
-    // Establish server events for debugging
-    if (this.DEBUG) {
-
-      // Establish net.Server event handlers
-      server.on('error', (error: Error) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ` net.Server received error: ${error}`) : true
-      })
-      server.on('listening', () => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ` net.Server server is in listen mode`) : true
-      })
-
-      // Establish http.Server event handlers
-      server.on('checkContinue', (request: IncomingMessage, response: ServerResponse) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server received <HTTP 100 continue>') : true
-        response.writeContinue()
-      })
-      server.on('checkExpectation', (request: IncomingMessage, response: ServerResponse) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server received HTTP expect header') : true
-      })
-      server.on('close', () => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server closed') : true
-      })
-      server.on('connect', (request: IncomingMessage, socket: Socket, head: Buffer) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server accepted connection') : true
-      })
-      server.on('connection', (socket: Socket) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server established connection') : true
-      })
-      server.on('request', (request: IncomingMessage, response: ServerResponse) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server received client request') : true
-      })
-      server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server received upgrade request') : true
-      })
-
-      // Establish tls.server event handlers
-      server.on('newSession', (sessionId: any, sessionData: any, callback: Function) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server server started TLS session') : true
-        callback()
-      })
-      server.on('OCSPRequest', (certificate: any, issuer: any, callback: Function) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server server received certificate status request') : true
-        callback()
-      })
-      server.on('resumeSession', (sessionId: any, callback: Function) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server server received TLS resume session status request') : true
-        callback()
-      })
-      server.on('secureConnection', (tlsSocket: TLSSocket) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server completed TLS handshaking process') : true
-      })
-      server.on('tlsClientError', (exception: Error, tlsSocket: TLSSocket) => {
-        this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server received an error before successful connection') : true
-      })
-    }
+    // Establish <tls.Server/Http2SecureServer> events
+    server.on('newSession', (sessionId: any, sessionData: any, callback: Function) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} TLS session established`) : true
+      callback()
+    })
+    server.on('OCSPRequest', (certificate: Buffer, issuer: Buffer, callback: Function) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client sent certificate status request`) : true
+      callback()
+    })
+    server.on('resumeSession', (sessionId: any, callback: Function) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client sent TLS session resume request`) : true
+      callback()
+    })
+    server.on('secureConnection', (tlsSocket: TLSSocket) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} completed TLS handshaking`) : true
+    })
+    server.on('tlsClientError', (error: Error, socket: TLSSocket) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} error received before successful connection: ${error}`) : true
+      this.clientError(error, socket)
+    })
+    server.on('session', () => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} HTTP2 session created`) : true
+    })
+    server.on('sessionError', () => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} session error occurred`) : true
+    })
+    server.on('stream', () => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} stream event occurred`) : true
+    })
+    server.on('timeout', () => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server is idle`) : true
+    })
+    server.on('unknownProtocol', () => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client failed protocol negotiation`) : true
+    })
 
     // Start the server
     server.listen(port, () => {
-      this.DEBUG ? this.logDebug('HTTP' + (secure ? 'S' : '') + ` server started on port ${port}`) : true
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection? 'S' : ''} server started on port ${port}`) : true
     })
   }
     
@@ -237,7 +279,7 @@ export abstract class ABHttpServer {
 
     const url = require('url')
     const { StringDecoder } = require('string_decoder')
-  
+   
     // Supported HTTP methods based upon HTTP Method Registry at
     // http://www.iana.org/assignments/http-methods/http-methods.xhtml
     const httpMethods = {
@@ -287,8 +329,8 @@ export abstract class ABHttpServer {
 
     // Build a container holding all the data of the request
     const requestData: ABRequest = {
-      'version': VERSION,
       'server': {
+        'hostname': this.httpStatistics.server.hostname,
         'address': request.socket.localAddress || '',
         'port': request.socket.localPort.toString() || '',
       },
@@ -299,6 +341,8 @@ export abstract class ABHttpServer {
       'http': {
         'version': request.httpVersion || '',
         'tls': (request.socket instanceof TLSSocket) ? true : false,
+        'tlsVersion': '',
+        'tlsCipher': '',
         'method': request.method!.toLowerCase() || '',
         'headers': request.headers || '',
         'data': '',
@@ -321,6 +365,12 @@ export abstract class ABHttpServer {
       }
     }
 
+    // Get TLS version and cipher
+    if (requestData.http.tls) {
+      requestData.http.tlsVersion = (<TLSSocket>request.socket).getProtocol() || 'unknown'
+      requestData.http.tlsCipher = (<TLSSocket>request.socket).getCipher().name
+    }
+
     // Get the http payload (if present)
     const decoder: any = new StringDecoder('utf8')
 
@@ -332,7 +382,7 @@ export abstract class ABHttpServer {
 
       const contentLength: number = requestData.http.data.length
 
-      this.DEBUG ? this.logDebug(`<= HTTP/${requestData.http.version} (${requestData.http.tls ? '' : 'Non-'}TLS) - Method ${requestData.http.method.toUpperCase()} - URL /${requestData.url.path} - Content-Length ${contentLength}`) : true
+      this.DEBUG ? this.logDebug(`<= HTTP/${requestData.http.version} (${requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS'}) - Method ${requestData.http.method.toUpperCase()} - URL /${requestData.url.path} - Content-Length ${contentLength}`) : true
       
       // Update statistics
       if (requestData.http.tls) {
@@ -344,7 +394,7 @@ export abstract class ABHttpServer {
       }
       
       // Get the specific function to handle the HTTP method
-      let methodFunction: any = (<any>httpMethods)[requestData.http.method]
+      let methodFunction: Function = (<any>httpMethods)[requestData.http.method]
 
       // Return an HTTP 501 error if the HTTP method is not defined 
       if (typeof (methodFunction) === 'undefined') {
@@ -440,6 +490,15 @@ export abstract class ABHttpServer {
     }, httpStatus)
   }
 
+  /**
+   * Redirect to new URL
+   * @param {response}    ServerResponse object
+   * @param {string}      URL to redirect
+   */
+  redirectUrl(response: ServerResponse, redirectURL: string): void {
+    this.sendData(response, 'text/plain', '', 301, { 'Location': redirectURL})
+  }
+  
   /**
    * Sends not-implemented error message to the client
    * @param {request}       ABRequest object
@@ -569,7 +628,7 @@ export abstract class ABHttpServer {
       }
 
       // Read content of file
-      fs.readFile(filePathNormalized, (readError: Error, data: string) => {
+      fs.readFile(filePathNormalized, (readError: Error, data: Buffer) => {
         // File can not be read - Return 500 (Internal Server Error)
         if (readError) {
           this.sendError(response, `The file ${filePathNormalized} could not be read`, 500)
@@ -610,8 +669,9 @@ export abstract class ABHttpServer {
    * @param {mimeType}      HTTP Content-Type
    * @param {text}          Data to be written
    * @param {httpStatus}    HTTP Status code (default = 200)
+   * @param {headers}       Additional HTTP headers (default = {})
    */
-  private sendData(response: ServerResponse, mimeType: string, text: string, httpStatus: number = 200): void {
+  private sendData(response: ServerResponse, mimeType: string, text: string | Buffer, httpStatus: number = 200, headers: any = {}): void {
 
     // Get length of data to be sent
     let contentLength: number = text.length
@@ -622,10 +682,17 @@ export abstract class ABHttpServer {
       return
     }
 
-    // Send additional HTTP headers
+    // Send mandatory HTTP headers
     if (this.httpHeaders) {
       for (let key in this.httpHeaders) {
         response.setHeader(key, this.httpHeaders[key])
+      }
+    }
+
+    // Send passed HTTP headers
+    if (headers) {
+      for (let key in headers) {
+        response.setHeader(key, headers[key])
       }
     }
 

@@ -1,5 +1,12 @@
 # Revision History
 
+## Version 2.1.0 / 14-Nov-2018
+
+* Add: getStatistics() now includes statistics for server, operating system, platform and CPU usage
+* Add: ABRequest object now includes hostname, TLS version and used cypher
+* Add: New method redirectUrl() to send a HTTP 301 redirect to the client
+* Change: Code cleanup in event debugging
+
 ## Version 2.0.2 / 07-Nov-2018
 
 * Add: Include method sendFile() to return content of a static file

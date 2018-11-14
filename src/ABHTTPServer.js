@@ -15,6 +15,7 @@ var ABHttpServer = /** @class */ (function () {
      * Create the HTTP server
      * @param {httpPort} Port number (1 - 65535) for the HTTP server or 0
      * @param {httpsPort} Port number (1 - 65535) for the HTTPS server or 0
+     * @returns {ABHttpServer} Object
      */
     function ABHttpServer(httpPort, httpsPort) {
         if (httpPort === void 0) { httpPort = 0; }
@@ -25,8 +26,22 @@ var ABHttpServer = /** @class */ (function () {
         this.httpsServer = null;
         this.httpHeaders = {};
         this.isActive = false;
-        // Collect some HTTP statistics
+        // Server statistics object to be returned to the user via getStatistics()
         this.httpStatistics = {
+            server: {
+                className: CLASSNAME,
+                classVersion: VERSION,
+                startTime: new Date().toISOString(),
+                startArguments: process.argv,
+                nodeVersion: process.version,
+                hostname: '',
+                osPlatform: '',
+                osType: '',
+                osRelease: '',
+                cpuArchitecture: '',
+                cpuUsageUserSec: 0.0,
+                cpuUsageSystemSec: 0.0
+            },
             request: {
                 http: {
                     count: 0,
@@ -47,18 +62,25 @@ var ABHttpServer = /** @class */ (function () {
         var https = require('http2');
         var fs = require('fs');
         var path = require('path');
+        var os = require('os');
+        // Complete statistic object
+        this.httpStatistics.server.hostname = os.hostname();
+        this.httpStatistics.server.cpuArchitecture = os.arch();
+        this.httpStatistics.server.osPlatform = os.platform();
+        this.httpStatistics.server.osType = os.type();
+        this.httpStatistics.server.osRelease = os.release();
         // Check constructor arguments
         if (arguments[0] < 0 || arguments[0] > 65535 || arguments[1] < 0 || arguments[1] > 65535) {
-            throw new RangeError(CLASSNAME + ': Both port arguments must be between 0 and 65535');
+            throw new RangeError(CLASSNAME + ": Both port arguments must be between 0 and 65535");
         }
         if (arguments[0] % 1 !== 0 || arguments[1] % 1 !== 0) {
-            throw new RangeError(CLASSNAME + ': Both port arguments must have integer values');
+            throw new RangeError(CLASSNAME + ": Both port arguments must have integer values");
         }
         if (arguments[0] === arguments[1]) {
-            throw new RangeError(CLASSNAME + ': Both ports must not be equal');
+            throw new RangeError(CLASSNAME + ": Both ports must not be equal");
         }
         if (arguments[0] === 0 && arguments[1] === 0) {
-            throw new RangeError(CLASSNAME + ': At least one port must be non-zero');
+            throw new RangeError(CLASSNAME + ": At least one port must be non-zero");
         }
         // Start the HTTP server
         if (httpPort !== 0) {
@@ -79,7 +101,7 @@ var ABHttpServer = /** @class */ (function () {
             this.httpsServer = https.createSecureServer(httpsOptions, function (request, response) {
                 _this.processHttpRequest(request, response);
             });
-            this.startServer(this.httpsServer, httpsPort, true);
+            this.startServer(this.httpsServer, httpsPort);
         }
         // Mark server active
         this.isActive = true;
@@ -87,10 +109,11 @@ var ABHttpServer = /** @class */ (function () {
     /**
      * Return string of object
      * @param {-}
-     * @returns {string} String representation of object
+     * @returns {string} String representation of ABHttpServer object
      */
     ABHttpServer.prototype.toString = function () {
         var status = '';
+        status += "Hostname: " + this.httpStatistics.server.hostname + ", ";
         status += "HTTP: " + (this.httpServer ? 'true' : 'false') + ", ";
         status += "HTTPS: " + (this.httpsServer ? 'true' : 'false') + ", ";
         status += "Active: " + (this.isActive ? 'true' : 'false') + ", ";
@@ -103,77 +126,91 @@ var ABHttpServer = /** @class */ (function () {
      * @returns {statistics} JSON object with server statistics
      */
     ABHttpServer.prototype.getStatistics = function () {
+        // Update statistics
+        var cpuUsage = process.cpuUsage();
+        this.httpStatistics.server.cpuUsageUserSec = cpuUsage.user / 1000000;
+        this.httpStatistics.server.cpuUsageSystemSec = cpuUsage.system / 1000000;
         return this.httpStatistics;
     };
     /**
      * Establish server events and start the server
      * @param {server}  Server
      * @param {port}    TCP/IP port number
-     * @param {secure}  TLS flag (default = false)
      */
-    ABHttpServer.prototype.startServer = function (server, port, secure) {
+    ABHttpServer.prototype.startServer = function (server, port) {
         var _this = this;
-        if (secure === void 0) { secure = false; }
-        // Establish server event
-        server.on('clientError', function (err, socket) {
-            _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + (" http.Server client error: " + err)) : true;
-            _this.clientError(err, socket);
+        // Get TLS state
+        var tlsConnection = (server.constructor.name === 'Http2SecureServer') ? true : false;
+        // Establish <net.Server/http.Server> events
+        server.on('checkContinue', function (request, response) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " \"100-continue\" received") : true;
         });
-        // Establish server events for debugging
-        if (this.DEBUG) {
-            // Establish net.Server event handlers
-            server.on('error', function (error) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + (" net.Server received error: " + error)) : true;
-            });
-            server.on('listening', function () {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + " net.Server server is in listen mode") : true;
-            });
-            // Establish http.Server event handlers
-            server.on('checkContinue', function (request, response) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server received <HTTP 100 continue>') : true;
-                response.writeContinue();
-            });
-            server.on('checkExpectation', function (request, response) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server received HTTP expect header') : true;
-            });
-            server.on('close', function () {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server closed') : true;
-            });
-            server.on('connect', function (request, socket, head) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server accepted connection') : true;
-            });
-            server.on('connection', function (socket) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server established connection') : true;
-            });
-            server.on('request', function (request, response) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server received client request') : true;
-            });
-            server.on('upgrade', function (request, socket, head) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' http.Server server received upgrade request') : true;
-            });
-            // Establish tls.server event handlers
-            server.on('newSession', function (sessionId, sessionData, callback) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server server started TLS session') : true;
-                callback();
-            });
-            server.on('OCSPRequest', function (certificate, issuer, callback) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server server received certificate status request') : true;
-                callback();
-            });
-            server.on('resumeSession', function (sessionId, callback) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server server received TLS resume session status request') : true;
-                callback();
-            });
-            server.on('secureConnection', function (tlsSocket) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server completed TLS handshaking process') : true;
-            });
-            server.on('tlsClientError', function (exception, tlsSocket) {
-                _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + ' tls.Server received an error before successful connection') : true;
-            });
-        }
+        server.on('checkExpectation', function (request, response) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " expect header received") : true;
+        });
+        server.on('clientError', function (error, socket) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client error: " + error) : true;
+            _this.clientError(error, socket);
+        });
+        server.on('close', function () {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server closed") : true;
+        });
+        server.on('connect', function (request, socket, head) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client connect received") : true;
+        });
+        server.on('connection', function (socket) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client connected") : true;
+        });
+        server.on('error', function (error) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " error received: " + error) : true;
+        });
+        server.on('listening', function () {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server is listening") : true;
+        });
+        server.on('request', function (request, response) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client request received") : true;
+        });
+        server.on('upgrade', function (request, socket, head) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client upgrade received") : true;
+        });
+        // Establish <tls.Server/Http2SecureServer> events
+        server.on('newSession', function (sessionId, sessionData, callback) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " TLS session established") : true;
+            callback();
+        });
+        server.on('OCSPRequest', function (certificate, issuer, callback) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client sent certificate status request") : true;
+            callback();
+        });
+        server.on('resumeSession', function (sessionId, callback) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client sent TLS session resume request") : true;
+            callback();
+        });
+        server.on('secureConnection', function (tlsSocket) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " completed TLS handshaking") : true;
+        });
+        server.on('tlsClientError', function (error, socket) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " error received before successful connection: " + error) : true;
+            _this.clientError(error, socket);
+        });
+        server.on('session', function () {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " HTTP2 session created") : true;
+        });
+        server.on('sessionError', function () {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " session error occurred") : true;
+        });
+        server.on('stream', function () {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " stream event occurred") : true;
+        });
+        server.on('timeout', function () {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server is idle") : true;
+        });
+        server.on('unknownProtocol', function () {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client failed protocol negotiation") : true;
+        });
         // Start the server
         server.listen(port, function () {
-            _this.DEBUG ? _this.logDebug('HTTP' + (secure ? 'S' : '') + (" server started on port " + port)) : true;
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server started on port " + port) : true;
         });
     };
     /**
@@ -232,8 +269,8 @@ var ABHttpServer = /** @class */ (function () {
         var parsedUrl = url.parse(request.url);
         // Build a container holding all the data of the request
         var requestData = {
-            'version': VERSION,
             'server': {
+                'hostname': this.httpStatistics.server.hostname,
                 'address': request.socket.localAddress || '',
                 'port': request.socket.localPort.toString() || ''
             },
@@ -244,6 +281,8 @@ var ABHttpServer = /** @class */ (function () {
             'http': {
                 'version': request.httpVersion || '',
                 'tls': (request.socket instanceof tls_1.TLSSocket) ? true : false,
+                'tlsVersion': '',
+                'tlsCipher': '',
                 'method': request.method.toLowerCase() || '',
                 'headers': request.headers || '',
                 'data': ''
@@ -264,6 +303,11 @@ var ABHttpServer = /** @class */ (function () {
                 requestData.url.query[keyvalue[0]] = keyvalue[1];
             }
         }
+        // Get TLS version and cipher
+        if (requestData.http.tls) {
+            requestData.http.tlsVersion = request.socket.getProtocol() || 'unknown';
+            requestData.http.tlsCipher = request.socket.getCipher().name;
+        }
         // Get the http payload (if present)
         var decoder = new StringDecoder('utf8');
         request.on('data', function (dataChunk) {
@@ -272,7 +316,7 @@ var ABHttpServer = /** @class */ (function () {
         request.on('end', function () {
             requestData.http.data += decoder.end();
             var contentLength = requestData.http.data.length;
-            _this.DEBUG ? _this.logDebug("<= HTTP/" + requestData.http.version + " (" + (requestData.http.tls ? '' : 'Non-') + "TLS) - Method " + requestData.http.method.toUpperCase() + " - URL /" + requestData.url.path + " - Content-Length " + contentLength) : true;
+            _this.DEBUG ? _this.logDebug("<= HTTP/" + requestData.http.version + " (" + (requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS') + ") - Method " + requestData.http.method.toUpperCase() + " - URL /" + requestData.url.path + " - Content-Length " + contentLength) : true;
             // Update statistics
             if (requestData.http.tls) {
                 _this.httpStatistics.request.https.count++;
@@ -367,6 +411,14 @@ var ABHttpServer = /** @class */ (function () {
             'component': CLASSNAME,
             'error': errorMessage
         }, httpStatus);
+    };
+    /**
+     * Redirect to new URL
+     * @param {response}    ServerResponse object
+     * @param {string}      URL to redirect
+     */
+    ABHttpServer.prototype.redirectUrl = function (response, redirectURL) {
+        this.sendData(response, 'text/plain', '', 301, { 'Location': redirectURL });
     };
     /**
      * Sends not-implemented error message to the client
@@ -527,19 +579,27 @@ var ABHttpServer = /** @class */ (function () {
      * @param {mimeType}      HTTP Content-Type
      * @param {text}          Data to be written
      * @param {httpStatus}    HTTP Status code (default = 200)
+     * @param {headers}       Additional HTTP headers (default = {})
      */
-    ABHttpServer.prototype.sendData = function (response, mimeType, text, httpStatus) {
+    ABHttpServer.prototype.sendData = function (response, mimeType, text, httpStatus, headers) {
         if (httpStatus === void 0) { httpStatus = 200; }
+        if (headers === void 0) { headers = {}; }
         // Get length of data to be sent
         var contentLength = text.length;
         this.DEBUG ? this.logDebug("=> HTTP Status " + httpStatus + " - Content-Length " + contentLength + " - Content-Type " + mimeType) : true;
         if (!this.isActive) {
             return;
         }
-        // Send additional HTTP headers
+        // Send mandatory HTTP headers
         if (this.httpHeaders) {
             for (var key in this.httpHeaders) {
                 response.setHeader(key, this.httpHeaders[key]);
+            }
+        }
+        // Send passed HTTP headers
+        if (headers) {
+            for (var key in headers) {
+                response.setHeader(key, headers[key]);
             }
         }
         // Set standard HTTP headers

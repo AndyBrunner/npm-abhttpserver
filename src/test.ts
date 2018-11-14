@@ -9,7 +9,7 @@ class MyServer extends ABHttpServer {
       this.sendJSON(response, this.getStatistics())
     } else {
       this.sendText(response, `The URL sent was ${request.url.path}`)
-    } 
+    }
   }
   post(request: ABRequest, response: ServerResponse) {
     this.sendJSON(response, { data: `The raw data sent was ${request.http.data}` })

@@ -2,8 +2,8 @@
 import { ServerResponse } from 'http';
 import { Socket } from 'net';
 export declare type ABRequest = {
-    'version': string;
     'server': {
+        'hostname': string;
         'address': string;
         'port': string;
     };
@@ -14,6 +14,8 @@ export declare type ABRequest = {
     'http': {
         'version': string;
         'tls': boolean;
+        'tlsVersion': string;
+        'tlsCipher': string;
         'method': string;
         'headers': {};
         'data': string;
@@ -40,12 +42,13 @@ export declare abstract class ABHttpServer {
      * Create the HTTP server
      * @param {httpPort} Port number (1 - 65535) for the HTTP server or 0
      * @param {httpsPort} Port number (1 - 65535) for the HTTPS server or 0
+     * @returns {ABHttpServer} Object
      */
     constructor(httpPort?: number, httpsPort?: number);
     /**
      * Return string of object
      * @param {-}
-     * @returns {string} String representation of object
+     * @returns {string} String representation of ABHttpServer object
      */
     toString(): string;
     /**
@@ -53,12 +56,11 @@ export declare abstract class ABHttpServer {
      * @param {-}
      * @returns {statistics} JSON object with server statistics
      */
-    getStatistics(): any;
+    getStatistics(): {};
     /**
      * Establish server events and start the server
      * @param {server}  Server
      * @param {port}    TCP/IP port number
-     * @param {secure}  TLS flag (default = false)
      */
     private startServer;
     /**
@@ -106,6 +108,12 @@ export declare abstract class ABHttpServer {
      */
     private sendError;
     /**
+     * Redirect to new URL
+     * @param {response}    ServerResponse object
+     * @param {string}      URL to redirect
+     */
+    redirectUrl(response: ServerResponse, redirectURL: string): void;
+    /**
      * Sends not-implemented error message to the client
      * @param {request}       ABRequest object
      * @param {response}      ServerResponse object
@@ -135,6 +143,7 @@ export declare abstract class ABHttpServer {
      * @param {mimeType}      HTTP Content-Type
      * @param {text}          Data to be written
      * @param {httpStatus}    HTTP Status code (default = 200)
+     * @param {headers}       Additional HTTP headers (default = {})
      */
     private sendData;
     clientError(err: Error, socket: Socket): void;
