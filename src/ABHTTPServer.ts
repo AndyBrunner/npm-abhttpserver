@@ -9,7 +9,7 @@ import { Stats } from 'fs';
 
 // Global constants
 const CLASSNAME: string = 'ABHttpServer'
-const VERSION: string   = '2.1.x'           //TODO: Class version number
+const VERSION: string   = '2.2.0'           //TODO: Class version number
 
 // Define request object to be passed to every user method
 export type ABRequest = {
@@ -105,18 +105,18 @@ export abstract class ABHttpServer {
     this.httpStatistics.server.osPlatform = os.platform()
     this.httpStatistics.server.osType = os.type()
     this.httpStatistics.server.osRelease = os.release()
-      
+    
     // Check constructor arguments
-    if (arguments[0] < 0 || arguments[0] > 65535 || arguments[1] < 0 || arguments[1] > 65535) {
+    if (httpPort < 0 || httpPort > 65535 || httpsPort < 0 || httpsPort > 65535) {
       throw new RangeError(`${CLASSNAME}: Both port arguments must be between 0 and 65535`)
     }
-    if (arguments[0] % 1 !== 0 || arguments[1] % 1 !== 0) {
+    if (httpPort % 1 !== 0 || httpsPort % 1 !== 0) {
       throw new RangeError(`${CLASSNAME}: Both port arguments must have integer values`)
     }
-    if (arguments[0] === arguments[1]) {
+    if (httpPort === httpsPort) {
       throw new RangeError(`${CLASSNAME}: Both ports must not be equal`)
     }
-    if (arguments[0] === 0 && arguments[1] === 0) {
+    if (httpPort === 0 && httpsPort === 0) {
       throw new RangeError(`${CLASSNAME}: At least one port must be non-zero`)
     }
         
@@ -198,25 +198,25 @@ export abstract class ABHttpServer {
       
     // Establish <net.Server/http.Server> events
     server.on('clientError', (error: Error, socket: Socket) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client error: ${error}`) : true
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${socket.remoteAddress} error: ${error}`) : true
       this.clientError(error, socket)
     })
 
     if (this.DEBUG) {
       server.on('checkContinue', (request: IncomingMessage, response: ServerResponse) => {
-        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} "100-continue" received`)
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${request.connection.remoteAddress} "100-continue" received`)
       })
       server.on('checkExpectation', (request: IncomingMessage, response: ServerResponse) => {
-        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} expect header received`)
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${request.connection.remoteAddress} expect header received`)
       })
       server.on('close', () => {
         this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server closed`)
       })
       server.on('connect', (request: IncomingMessage, socket: Socket, head: Buffer) => {
-        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client connect received`)
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${request.connection.remoteAddress} connect received`)
       })
       server.on('connection', (socket: Socket) => {
-        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client connected`)
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${socket.remoteAddress} connected`)
       })
       server.on('error', (error: Error) => {
         this.logDebug(`HTTP${tlsConnection ? 'S' : ''} error received: ${error}`)
@@ -225,16 +225,16 @@ export abstract class ABHttpServer {
         this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server is listening`)
       })
       server.on('request', (request: IncomingMessage, response: ServerResponse) => {
-        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client request received`)
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${request.connection.remoteAddress} request received`)
       })
       server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
-        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client upgrade received`)
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${request.connection.remoteAddress} upgrade received`)
       })
     }
 
     // Establish <tls.Server/Http2SecureServer> events
     server.on('tlsClientError', (error: Error, socket: TLSSocket) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} error received before successful connection: ${error}`) : true
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${socket.remoteAddress} error received before successful connection: ${error}`) : true
       this.clientError(error, socket)
     })
 
@@ -251,8 +251,8 @@ export abstract class ABHttpServer {
         this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client sent TLS session resume request`)
         callback()
       })
-      server.on('secureConnection', (tlsSocket: TLSSocket) => {
-        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} completed TLS handshaking`)
+      server.on('secureConnection', (socket: TLSSocket) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${socket.remoteAddress} completed TLS handshaking`)
       })
       server.on('session', () => {
         this.logDebug(`HTTP${tlsConnection ? 'S' : ''} HTTP2 session created`)
@@ -390,7 +390,7 @@ export abstract class ABHttpServer {
 
       const contentLength: number = requestData.http.data.length
 
-      this.DEBUG ? this.logDebug(`<= HTTP/${requestData.http.version} (${requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS'}) - Method ${requestData.http.method.toUpperCase()} - URL /${requestData.url.path} - Content-Length ${contentLength}`) : true
+      this.DEBUG ? this.logDebug(`<= Client ${requestData.client.address} HTTP/${requestData.http.version} (${requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS'}) - ${requestData.http.method.toUpperCase()} - URL /${requestData.url.path} - ${contentLength} bytes`) : true
       
       // Update statistics
       if (requestData.http.tls) {
@@ -406,7 +406,7 @@ export abstract class ABHttpServer {
       let methodFunction: Function = (<any>httpMethods)[requestData.http.method]
 
       if (typeof (methodFunction) === 'undefined') {
-        this.DEBUG ? this.logDebug(`Unsupported HTTP Method ${requestData.http.method.toUpperCase()} received`) : true
+        this.DEBUG ? this.logDebug(`Client ${requestData.client.address} sent unsupported HTTP Method ${requestData.http.method.toUpperCase()} received`) : true
         methodFunction = (<any>httpMethods)['?']
         allMethodsCall = true
       }
@@ -638,7 +638,7 @@ export abstract class ABHttpServer {
 
     // Check if file path is outside of the base path - Return 400 Bad Request
     if (filePathNormalized.indexOf(fileRoot) === -1) {
-      this.sendError(response, `The file ${filePathNormalized} is outside of the base file path`, 400)
+      this.sendError(response, `The file ${filePath} is outside of the base directory`, 400)
       return
     }
 
@@ -646,12 +646,12 @@ export abstract class ABHttpServer {
     fs.stat(filePathNormalized, (fileError: Error, fileStats: Stats) => {
       // Check if file exist - Return 404 Bad Request
       if (fileError) {
-        this.sendError(response, `The file ${filePathNormalized} does not exist`, 404)
+        this.sendError(response, `The file ${filePath} does not exist`, 404)
         return
       }
       // Check if file is a directory - Return 400 Bad Request
       if (fileStats.isDirectory()) {
-        this.sendError(response, `The file ${filePathNormalized} specifies a directory`, 400)
+        this.sendError(response, `The file ${filePath} specifies a directory`, 400)
         return
       }
 
@@ -659,7 +659,7 @@ export abstract class ABHttpServer {
       fs.readFile(filePathNormalized, (readError: Error, data: Buffer) => {
         // File can not be read - Return 500 (Internal Server Error)
         if (readError) {
-          this.sendError(response, `The file ${filePathNormalized} could not be read`, 500)
+          this.sendError(response, `The file ${filePath} could not be read`, 500)
           return
         }
 
@@ -704,7 +704,7 @@ export abstract class ABHttpServer {
     // Get length of data to be sent
     let contentLength: number = text.length
 
-    this.DEBUG ? this.logDebug(`=> HTTP Status ${httpStatus} - Content-Length ${contentLength} - Content-Type ${mimeType}`) : true
+    this.DEBUG ? this.logDebug(`=> Client ${response.connection.remoteAddress} Status ${httpStatus} - ${contentLength} bytes - Type ${mimeType}`) : true
 
     if (!this.isActive) {
       return

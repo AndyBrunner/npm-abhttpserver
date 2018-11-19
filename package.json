@@ -1,6 +1,6 @@
 {
   "name": "abhttpserver",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Simple HTTP Server Framework ",
   "main": "test.js",
   "scripts": {
@@ -19,5 +19,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/AndyBrunner/npm-abhttpserver.git"
+  },
+  "dependencies": {
+    "@types/node": "^10.12.9"
   }
 }

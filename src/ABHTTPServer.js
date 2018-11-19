@@ -6,7 +6,7 @@ var tls_1 = require("tls");
 */
 // Global constants
 var CLASSNAME = 'ABHttpServer';
-var VERSION = '2.0.2'; //TODO: Class version number
+var VERSION = '2.2.0'; //TODO: Class version number
 /**
  * Abstract class to be implemented/subclassed by the user
 */
@@ -57,7 +57,7 @@ var ABHttpServer = /** @class */ (function () {
                 bytes: 0
             }
         };
-        this.DEBUG ? this.logDebug("Object constructor called (" + httpPort + ", " + httpsPort + ")") : true;
+        this.DEBUG ? this.logDebug("Class version " + VERSION + "\u00A0constructor called (" + httpPort + ", " + httpsPort + ")") : true;
         var http = require('http');
         var https = require('http2');
         var fs = require('fs');
@@ -70,16 +70,16 @@ var ABHttpServer = /** @class */ (function () {
         this.httpStatistics.server.osType = os.type();
         this.httpStatistics.server.osRelease = os.release();
         // Check constructor arguments
-        if (arguments[0] < 0 || arguments[0] > 65535 || arguments[1] < 0 || arguments[1] > 65535) {
+        if (httpPort < 0 || httpPort > 65535 || httpsPort < 0 || httpsPort > 65535) {
             throw new RangeError(CLASSNAME + ": Both port arguments must be between 0 and 65535");
         }
-        if (arguments[0] % 1 !== 0 || arguments[1] % 1 !== 0) {
+        if (httpPort % 1 !== 0 || httpsPort % 1 !== 0) {
             throw new RangeError(CLASSNAME + ": Both port arguments must have integer values");
         }
-        if (arguments[0] === arguments[1]) {
+        if (httpPort === httpsPort) {
             throw new RangeError(CLASSNAME + ": Both ports must not be equal");
         }
-        if (arguments[0] === 0 && arguments[1] === 0) {
+        if (httpPort === 0 && httpsPort === 0) {
             throw new RangeError(CLASSNAME + ": At least one port must be non-zero");
         }
         // Start the HTTP server
@@ -113,12 +113,13 @@ var ABHttpServer = /** @class */ (function () {
      */
     ABHttpServer.prototype.toString = function () {
         var status = '';
-        status += "Hostname: " + this.httpStatistics.server.hostname + ", ";
+        status += "Class: " + CLASSNAME + ", ";
+        status += "Host: " + this.httpStatistics.server.hostname + ", ";
         status += "HTTP: " + (this.httpServer ? 'true' : 'false') + ", ";
         status += "HTTPS: " + (this.httpsServer ? 'true' : 'false') + ", ";
         status += "Active: " + (this.isActive ? 'true' : 'false') + ", ";
         status += "AB_DEBUG: " + (this.DEBUG ? 'true' : 'false');
-        return CLASSNAME + "[" + status + "]";
+        return "[" + status + "]";
     };
     /**
      * Return the server statistics
@@ -142,72 +143,76 @@ var ABHttpServer = /** @class */ (function () {
         // Get TLS state
         var tlsConnection = (server.constructor.name === 'Http2SecureServer') ? true : false;
         // Establish <net.Server/http.Server> events
-        server.on('checkContinue', function (request, response) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " \"100-continue\" received") : true;
-        });
-        server.on('checkExpectation', function (request, response) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " expect header received") : true;
-        });
         server.on('clientError', function (error, socket) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client error: " + error) : true;
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + socket.remoteAddress + "\u00A0error: " + error) : true;
             _this.clientError(error, socket);
         });
-        server.on('close', function () {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server closed") : true;
-        });
-        server.on('connect', function (request, socket, head) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client connect received") : true;
-        });
-        server.on('connection', function (socket) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client connected") : true;
-        });
-        server.on('error', function (error) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " error received: " + error) : true;
-        });
-        server.on('listening', function () {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server is listening") : true;
-        });
-        server.on('request', function (request, response) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client request received") : true;
-        });
-        server.on('upgrade', function (request, socket, head) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client upgrade received") : true;
-        });
+        if (this.DEBUG) {
+            server.on('checkContinue', function (request, response) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + request.connection.remoteAddress + " \"100-continue\" received");
+            });
+            server.on('checkExpectation', function (request, response) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + request.connection.remoteAddress + " expect header received");
+            });
+            server.on('close', function () {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server closed");
+            });
+            server.on('connect', function (request, socket, head) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + request.connection.remoteAddress + " connect received");
+            });
+            server.on('connection', function (socket) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + socket.remoteAddress + "\u00A0connected");
+            });
+            server.on('error', function (error) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " error received: " + error);
+            });
+            server.on('listening', function () {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server is listening");
+            });
+            server.on('request', function (request, response) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + request.connection.remoteAddress + " request received");
+            });
+            server.on('upgrade', function (request, socket, head) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + request.connection.remoteAddress + " upgrade received");
+            });
+        }
         // Establish <tls.Server/Http2SecureServer> events
-        server.on('newSession', function (sessionId, sessionData, callback) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " TLS session established") : true;
-            callback();
-        });
-        server.on('OCSPRequest', function (certificate, issuer, callback) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client sent certificate status request") : true;
-            callback();
-        });
-        server.on('resumeSession', function (sessionId, callback) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client sent TLS session resume request") : true;
-            callback();
-        });
-        server.on('secureConnection', function (tlsSocket) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " completed TLS handshaking") : true;
-        });
         server.on('tlsClientError', function (error, socket) {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " error received before successful connection: " + error) : true;
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + socket.remoteAddress + "\u00A0error received before successful connection: " + error) : true;
             _this.clientError(error, socket);
         });
-        server.on('session', function () {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " HTTP2 session created") : true;
-        });
-        server.on('sessionError', function () {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " session error occurred") : true;
-        });
-        server.on('stream', function () {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " stream event occurred") : true;
-        });
-        server.on('timeout', function () {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server is idle") : true;
-        });
-        server.on('unknownProtocol', function () {
-            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client failed protocol negotiation") : true;
-        });
+        if (this.DEBUG) {
+            server.on('newSession', function (sessionId, sessionData, callback) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " TLS session established");
+                callback();
+            });
+            server.on('OCSPRequest', function (certificate, issuer, callback) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client sent certificate status request");
+                callback();
+            });
+            server.on('resumeSession', function (sessionId, callback) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client sent TLS session resume request");
+                callback();
+            });
+            server.on('secureConnection', function (socket) {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + socket.remoteAddress + " completed TLS handshaking");
+            });
+            server.on('session', function () {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " HTTP2 session created");
+            });
+            server.on('sessionError', function () {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " session error occurred");
+            });
+            server.on('stream', function () {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " stream event occurred");
+            });
+            server.on('timeout', function () {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server is idle");
+            });
+            server.on('unknownProtocol', function () {
+                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client failed protocol negotiation");
+            });
+        }
         // Start the server
         server.listen(port, function () {
             _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server started on port " + port) : true;
@@ -225,45 +230,46 @@ var ABHttpServer = /** @class */ (function () {
         // Supported HTTP methods based upon HTTP Method Registry at
         // http://www.iana.org/assignments/http-methods/http-methods.xhtml
         var httpMethods = {
-            'acl': function () { _this.acl(requestData, response); },
-            'baseline-control': function () { _this.baselinecontrol(requestData, response); },
-            'bind': function () { _this.bind(requestData, response); },
-            'checkin': function () { _this.checkin(requestData, response); },
-            'checkout': function () { _this.checkout(requestData, response); },
-            'connect': function () { _this.connect(requestData, response); },
-            'copy': function () { _this.copy(requestData, response); },
-            'delete': function () { _this["delete"](requestData, response); },
-            'get': function () { _this.get(requestData, response); },
-            'head': function () { _this.head(requestData, response); },
-            'label': function () { _this.label(requestData, response); },
-            'link': function () { _this.link(requestData, response); },
-            'lock': function () { _this.lock(requestData, response); },
-            'merge': function () { _this.merge(requestData, response); },
-            'mkactivity': function () { _this.mkactivity(requestData, response); },
-            'mkcalendar': function () { _this.mkcalendar(requestData, response); },
-            'mkcol': function () { _this.mkcol(requestData, response); },
-            'mkredirectref': function () { _this.mkredirectref(requestData, response); },
-            'mkworkspace': function () { _this.mkworkspace(requestData, response); },
-            'move': function () { _this.move(requestData, response); },
-            'options': function () { _this.options(requestData, response); },
-            'orderpatch': function () { _this.orderpatch(requestData, response); },
-            'patch': function () { _this.patch(requestData, response); },
-            'post': function () { _this.post(requestData, response); },
-            'pri': function () { _this.pri(requestData, response); },
-            'propfind': function () { _this.propfind(requestData, response); },
-            'proppatch': function () { _this.proppatch(requestData, response); },
-            'put': function () { _this.put(requestData, response); },
-            'rebind': function () { _this.rebind(requestData, response); },
-            'report': function () { _this.report(requestData, response); },
-            'search': function () { _this.search(requestData, response); },
-            'trace': function () { _this.trace(requestData, response); },
-            'unbind': function () { _this.unbind(requestData, response); },
-            'uncheckout': function () { _this.uncheckout(requestData, response); },
-            'unlink': function () { _this.unlink(requestData, response); },
-            'unlock': function () { _this.unlock(requestData, response); },
-            'update': function () { _this.update(requestData, response); },
-            'updateredirectref': function () { _this.updateredirectref(requestData, response); },
-            'version-control': function () { _this.versioncontrol(requestData, response); }
+            'acl': function () { return (_this.acl(requestData, response)); },
+            'baseline-control': function () { return (_this.baselinecontrol(requestData, response)); },
+            'bind': function () { return (_this.bind(requestData, response)); },
+            'checkin': function () { return (_this.checkin(requestData, response)); },
+            'checkout': function () { return (_this.checkout(requestData, response)); },
+            'connect': function () { return (_this.connect(requestData, response)); },
+            'copy': function () { return (_this.copy(requestData, response)); },
+            'delete': function () { return (_this["delete"](requestData, response)); },
+            'get': function () { return (_this.get(requestData, response)); },
+            'head': function () { return (_this.head(requestData, response)); },
+            'label': function () { return (_this.label(requestData, response)); },
+            'link': function () { return (_this.link(requestData, response)); },
+            'lock': function () { return (_this.lock(requestData, response)); },
+            'merge': function () { return (_this.merge(requestData, response)); },
+            'mkactivity': function () { return (_this.mkactivity(requestData, response)); },
+            'mkcalendar': function () { return (_this.mkcalendar(requestData, response)); },
+            'mkcol': function () { return (_this.mkcol(requestData, response)); },
+            'mkredirectref': function () { return (_this.mkredirectref(requestData, response)); },
+            'mkworkspace': function () { return (_this.mkworkspace(requestData, response)); },
+            'move': function () { return (_this.move(requestData, response)); },
+            'options': function () { return (_this.options(requestData, response)); },
+            'orderpatch': function () { return (_this.orderpatch(requestData, response)); },
+            'patch': function () { return (_this.patch(requestData, response)); },
+            'post': function () { return (_this.post(requestData, response)); },
+            'pri': function () { return (_this.pri(requestData, response)); },
+            'propfind': function () { return (_this.propfind(requestData, response)); },
+            'proppatch': function () { return (_this.proppatch(requestData, response)); },
+            'put': function () { return (_this.put(requestData, response)); },
+            'rebind': function () { return (_this.rebind(requestData, response)); },
+            'report': function () { return (_this.report(requestData, response)); },
+            'search': function () { return (_this.search(requestData, response)); },
+            'trace': function () { return (_this.trace(requestData, response)); },
+            'unbind': function () { return (_this.unbind(requestData, response)); },
+            'uncheckout': function () { return (_this.uncheckout(requestData, response)); },
+            'unlink': function () { return (_this.unlink(requestData, response)); },
+            'unlock': function () { return (_this.unlock(requestData, response)); },
+            'update': function () { return (_this.update(requestData, response)); },
+            'updateredirectref': function () { return (_this.updateredirectref(requestData, response)); },
+            'version-control': function () { return (_this.versioncontrol(requestData, response)); },
+            '?': function () { return (_this.allMethods(requestData, response)); }
         };
         // Parse the url
         var parsedUrl = url.parse(request.url);
@@ -316,7 +322,7 @@ var ABHttpServer = /** @class */ (function () {
         request.on('end', function () {
             requestData.http.data += decoder.end();
             var contentLength = requestData.http.data.length;
-            _this.DEBUG ? _this.logDebug("<= HTTP/" + requestData.http.version + " (" + (requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS') + ") - Method " + requestData.http.method.toUpperCase() + " - URL /" + requestData.url.path + " - Content-Length " + contentLength) : true;
+            _this.DEBUG ? _this.logDebug("<= Client " + requestData.client.address + "\u00A0HTTP/" + requestData.http.version + " (" + (requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS') + ") - " + requestData.http.method.toUpperCase() + " - URL /" + requestData.url.path + " - " + contentLength + " bytes") : true;
             // Update statistics
             if (requestData.http.tls) {
                 _this.httpStatistics.request.https.count++;
@@ -326,16 +332,39 @@ var ABHttpServer = /** @class */ (function () {
                 _this.httpStatistics.request.http.count++;
                 _this.httpStatistics.request.http.bytes += contentLength;
             }
-            // Get the specific function to handle the HTTP method
+            // Get the specific function to handle the HTTP method or the generic getMethods() function
+            var allMethodsCall = false;
             var methodFunction = httpMethods[requestData.http.method];
-            // Return an HTTP 501 error if the HTTP method is not defined 
             if (typeof (methodFunction) === 'undefined') {
-                _this.sendError(response, "The server does not support the HTTP method " + requestData.http.method.toUpperCase(), 501);
-                return;
+                _this.DEBUG ? _this.logDebug("Client " + requestData.client.address + " sent unsupported HTTP Method " + requestData.http.method.toUpperCase() + " received") : true;
+                methodFunction = httpMethods['?'];
+                allMethodsCall = true;
             }
             // Call the HTTP method function which should be overwitten/implemented by the users subclass
-            // If the user does not overwrite the default function, an HTTP 501 error will be sent
-            methodFunction();
+            var returnData = methodFunction(requestData, response);
+            // Return if anything other than true/false returned from subclass implementation
+            if (typeof (returnData) !== 'boolean') {
+                return;
+            }
+            // Return if the user implemented the subclass (default implementations return false)
+            if (returnData) {
+                return;
+            }
+            // Call the allMethods() if not already done
+            if (!allMethodsCall) {
+                methodFunction = httpMethods['?'];
+                returnData = methodFunction(requestData, response);
+                // Return if anything other than true/false returned from subclass implementation
+                if (typeof (returnData) !== 'boolean') {
+                    return;
+                }
+                // Return if the user implemented the subclass (default implementations return false)
+                if (returnData) {
+                    return;
+                }
+            }
+            // No method implementation in user subclass - Return 501 error
+            _this.sendError(response, "Missing server implementation for HTTP method " + requestData.http.method.toUpperCase(), 501);
         });
     };
     /**
@@ -419,14 +448,6 @@ var ABHttpServer = /** @class */ (function () {
      */
     ABHttpServer.prototype.redirectUrl = function (response, redirectURL) {
         this.sendData(response, 'text/plain', '', 301, { 'Location': redirectURL });
-    };
-    /**
-     * Sends not-implemented error message to the client
-     * @param {request}       ABRequest object
-     * @param {response}      ServerResponse object
-     */
-    ABHttpServer.prototype.sendNotImplementedError = function (request, response) {
-        this.sendError(response, "No user subclass implementation for HTTP method " + request.http.method.toUpperCase(), 501);
     };
     /**
      * Send the specified file to the client
@@ -527,26 +548,26 @@ var ABHttpServer = /** @class */ (function () {
         }
         // Check if file path is outside of the base path - Return 400 Bad Request
         if (filePathNormalized.indexOf(fileRoot) === -1) {
-            this.sendError(response, "The file " + filePathNormalized + " is outside of the base file path", 400);
+            this.sendError(response, "The file " + filePath + " is outside of the base directory", 400);
             return;
         }
         // Get file statistics
         fs.stat(filePathNormalized, function (fileError, fileStats) {
             // Check if file exist - Return 404 Bad Request
             if (fileError) {
-                _this.sendError(response, "The file " + filePathNormalized + " does not exist", 404);
+                _this.sendError(response, "The file " + filePath + " does not exist", 404);
                 return;
             }
             // Check if file is a directory - Return 400 Bad Request
             if (fileStats.isDirectory()) {
-                _this.sendError(response, "The file " + filePathNormalized + " specifies a directory", 400);
+                _this.sendError(response, "The file " + filePath + " specifies a directory", 400);
                 return;
             }
             // Read content of file
             fs.readFile(filePathNormalized, function (readError, data) {
                 // File can not be read - Return 500 (Internal Server Error)
                 if (readError) {
-                    _this.sendError(response, "The file " + filePathNormalized + " could not be read", 500);
+                    _this.sendError(response, "The file " + filePath + " could not be read", 500);
                     return;
                 }
                 // Set the MIME type corresponding to the file name if not specified
@@ -586,7 +607,7 @@ var ABHttpServer = /** @class */ (function () {
         if (headers === void 0) { headers = {}; }
         // Get length of data to be sent
         var contentLength = text.length;
-        this.DEBUG ? this.logDebug("=> HTTP Status " + httpStatus + " - Content-Length " + contentLength + " - Content-Type " + mimeType) : true;
+        this.DEBUG ? this.logDebug("=> Client " + response.connection.remoteAddress + " Status " + httpStatus + " - " + contentLength + " bytes - Type " + mimeType) : true;
         if (!this.isActive) {
             return;
         }
@@ -619,45 +640,46 @@ var ABHttpServer = /** @class */ (function () {
     ABHttpServer.prototype.clientError = function (err, socket) { };
     ABHttpServer.prototype.shutdown = function () { };
     // HTTP methods which can be implemented/overwritten by the users subclass
-    ABHttpServer.prototype.acl = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.baselinecontrol = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.bind = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.checkin = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.checkout = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.connect = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.copy = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype["delete"] = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.get = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.head = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.label = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.link = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.lock = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.merge = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.mkactivity = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.mkcalendar = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.mkcol = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.mkredirectref = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.mkworkspace = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.move = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.options = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.orderpatch = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.patch = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.post = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.pri = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.propfind = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.proppatch = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.put = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.rebind = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.report = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.search = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.trace = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.unbind = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.uncheckout = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.unlink = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.unlock = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.update = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.updateredirectref = function (request, response) { this.sendNotImplementedError(request, response); };
-    ABHttpServer.prototype.versioncontrol = function (request, response) { this.sendNotImplementedError(request, response); };
+    ABHttpServer.prototype.acl = function (request, response) { return false; };
+    ABHttpServer.prototype.baselinecontrol = function (request, response) { return false; };
+    ABHttpServer.prototype.bind = function (request, response) { return false; };
+    ABHttpServer.prototype.checkin = function (request, response) { return false; };
+    ABHttpServer.prototype.checkout = function (request, response) { return false; };
+    ABHttpServer.prototype.connect = function (request, response) { return false; };
+    ABHttpServer.prototype.copy = function (request, response) { return false; };
+    ABHttpServer.prototype["delete"] = function (request, response) { return false; };
+    ABHttpServer.prototype.get = function (request, response) { return false; };
+    ABHttpServer.prototype.head = function (request, response) { return false; };
+    ABHttpServer.prototype.label = function (request, response) { return false; };
+    ABHttpServer.prototype.link = function (request, response) { return false; };
+    ABHttpServer.prototype.lock = function (request, response) { return false; };
+    ABHttpServer.prototype.merge = function (request, response) { return false; };
+    ABHttpServer.prototype.mkactivity = function (request, response) { return false; };
+    ABHttpServer.prototype.mkcalendar = function (request, response) { return false; };
+    ABHttpServer.prototype.mkcol = function (request, response) { return false; };
+    ABHttpServer.prototype.mkredirectref = function (request, response) { return false; };
+    ABHttpServer.prototype.mkworkspace = function (request, response) { return false; };
+    ABHttpServer.prototype.move = function (request, response) { return false; };
+    ABHttpServer.prototype.options = function (request, response) { return false; };
+    ABHttpServer.prototype.orderpatch = function (request, response) { return false; };
+    ABHttpServer.prototype.patch = function (request, response) { return false; };
+    ABHttpServer.prototype.post = function (request, response) { return false; };
+    ABHttpServer.prototype.pri = function (request, response) { return false; };
+    ABHttpServer.prototype.propfind = function (request, response) { return false; };
+    ABHttpServer.prototype.proppatch = function (request, response) { return false; };
+    ABHttpServer.prototype.put = function (request, response) { return false; };
+    ABHttpServer.prototype.rebind = function (request, response) { return false; };
+    ABHttpServer.prototype.report = function (request, response) { return false; };
+    ABHttpServer.prototype.search = function (request, response) { return false; };
+    ABHttpServer.prototype.trace = function (request, response) { return false; };
+    ABHttpServer.prototype.unbind = function (request, response) { return false; };
+    ABHttpServer.prototype.uncheckout = function (request, response) { return false; };
+    ABHttpServer.prototype.unlink = function (request, response) { return false; };
+    ABHttpServer.prototype.unlock = function (request, response) { return false; };
+    ABHttpServer.prototype.update = function (request, response) { return false; };
+    ABHttpServer.prototype.updateredirectref = function (request, response) { return false; };
+    ABHttpServer.prototype.versioncontrol = function (request, response) { return false; };
+    ABHttpServer.prototype.allMethods = function (request, response) { return false; };
     return ABHttpServer;
 }());
 exports.ABHttpServer = ABHttpServer;

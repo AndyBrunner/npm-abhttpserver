@@ -1,5 +1,5 @@
 "use strict";
-// Example B: GetPost.ts
+// Example: GetPost.ts
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
@@ -21,7 +21,7 @@ var MyServer = /** @class */ (function (_super) {
         return _super !== null && _super.apply(this, arguments) || this;
     }
     MyServer.prototype.get = function (request, response) {
-        if (request.url.path == 'stats') {
+        if (request.url.path === 'stats') {
             this.sendJSON(response, this.getStatistics());
         }
         else {

@@ -1,5 +1,13 @@
 # Revision History
 
+## Version 2.2.0 / 19-Nov-2018
+
+* Add: Include sample code HelloWorld.ts, GetPost.ts, FileServer.ts and RedirectHttps.ts
+* Add: New method allMethods() which is called if no corresponding subclass for HTTP method is present. If the HTTP method cannot be handled with either a corresponding method and no allMethods() is present, a "HTTP 501 Not Implemented" is returned
+* Add: More detailed information in debug output
+* Change: Corrected bug in constructor argument checking
+* Change: Some monor code cleanup
+
 ## Version 2.1.0 / 14-Nov-2018
 
 * Add: getStatistics() now includes statistics for server, operating system, platform and CPU usage

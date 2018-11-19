@@ -1,11 +1,11 @@
-// Example B: GetPost.ts
+// Example: GetPost.ts
 
 import { ABHttpServer, ABRequest } from './ABHttpServer'
 import { ServerResponse } from 'http';
 
 class MyServer extends ABHttpServer {
   get(request: ABRequest, response: ServerResponse) {
-    if (request.url.path == 'stats') {
+    if (request.url.path === 'stats') {
       this.sendJSON(response, this.getStatistics())
     } else {
       this.sendText(response, `The URL sent was ${request.url.path}`)

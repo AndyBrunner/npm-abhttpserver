@@ -1,4 +1,4 @@
-// Example A: HelloWorld.ts
+// Example: HelloWorld.ts
 
 import { ABHttpServer, ABRequest } from './ABHttpServer'
 import { ServerResponse } from 'http';

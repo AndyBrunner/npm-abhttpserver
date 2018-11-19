@@ -1,4 +1,4 @@
-// Example C: RedirectHttps.ts
+// Example: RedirectHttps.ts
 
 import { ABHttpServer, ABRequest } from './ABHttpServer'
 import { ServerResponse } from 'http';

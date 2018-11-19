@@ -114,12 +114,6 @@ export declare abstract class ABHttpServer {
      */
     redirectUrl(response: ServerResponse, redirectURL: string): void;
     /**
-     * Sends not-implemented error message to the client
-     * @param {request}       ABRequest object
-     * @param {response}      ServerResponse object
-     */
-    private sendNotImplementedError;
-    /**
      * Send the specified file to the client
      * @param {response}    ServerResponse object
      * @param {filePath}    File name with path
@@ -148,43 +142,44 @@ export declare abstract class ABHttpServer {
     private sendData;
     clientError(err: Error, socket: Socket): void;
     shutdown(): void;
-    acl(request: ABRequest, response: ServerResponse): void;
-    baselinecontrol(request: ABRequest, response: ServerResponse): void;
-    bind(request: ABRequest, response: ServerResponse): void;
-    checkin(request: ABRequest, response: ServerResponse): void;
-    checkout(request: ABRequest, response: ServerResponse): void;
-    connect(request: ABRequest, response: ServerResponse): void;
-    copy(request: ABRequest, response: ServerResponse): void;
-    delete(request: ABRequest, response: ServerResponse): void;
-    get(request: ABRequest, response: ServerResponse): void;
-    head(request: ABRequest, response: ServerResponse): void;
-    label(request: ABRequest, response: ServerResponse): void;
-    link(request: ABRequest, response: ServerResponse): void;
-    lock(request: ABRequest, response: ServerResponse): void;
-    merge(request: ABRequest, response: ServerResponse): void;
-    mkactivity(request: ABRequest, response: ServerResponse): void;
-    mkcalendar(request: ABRequest, response: ServerResponse): void;
-    mkcol(request: ABRequest, response: ServerResponse): void;
-    mkredirectref(request: ABRequest, response: ServerResponse): void;
-    mkworkspace(request: ABRequest, response: ServerResponse): void;
-    move(request: ABRequest, response: ServerResponse): void;
-    options(request: ABRequest, response: ServerResponse): void;
-    orderpatch(request: ABRequest, response: ServerResponse): void;
-    patch(request: ABRequest, response: ServerResponse): void;
-    post(request: ABRequest, response: ServerResponse): void;
-    pri(request: ABRequest, response: ServerResponse): void;
-    propfind(request: ABRequest, response: ServerResponse): void;
-    proppatch(request: ABRequest, response: ServerResponse): void;
-    put(request: ABRequest, response: ServerResponse): void;
-    rebind(request: ABRequest, response: ServerResponse): void;
-    report(request: ABRequest, response: ServerResponse): void;
-    search(request: ABRequest, response: ServerResponse): void;
-    trace(request: ABRequest, response: ServerResponse): void;
-    unbind(request: ABRequest, response: ServerResponse): void;
-    uncheckout(request: ABRequest, response: ServerResponse): void;
-    unlink(request: ABRequest, response: ServerResponse): void;
-    unlock(request: ABRequest, response: ServerResponse): void;
-    update(request: ABRequest, response: ServerResponse): void;
-    updateredirectref(request: ABRequest, response: ServerResponse): void;
-    versioncontrol(request: ABRequest, response: ServerResponse): void;
+    acl(request: ABRequest, response: ServerResponse): any;
+    baselinecontrol(request: ABRequest, response: ServerResponse): any;
+    bind(request: ABRequest, response: ServerResponse): any;
+    checkin(request: ABRequest, response: ServerResponse): any;
+    checkout(request: ABRequest, response: ServerResponse): any;
+    connect(request: ABRequest, response: ServerResponse): any;
+    copy(request: ABRequest, response: ServerResponse): any;
+    delete(request: ABRequest, response: ServerResponse): any;
+    get(request: ABRequest, response: ServerResponse): any;
+    head(request: ABRequest, response: ServerResponse): any;
+    label(request: ABRequest, response: ServerResponse): any;
+    link(request: ABRequest, response: ServerResponse): any;
+    lock(request: ABRequest, response: ServerResponse): any;
+    merge(request: ABRequest, response: ServerResponse): any;
+    mkactivity(request: ABRequest, response: ServerResponse): any;
+    mkcalendar(request: ABRequest, response: ServerResponse): any;
+    mkcol(request: ABRequest, response: ServerResponse): any;
+    mkredirectref(request: ABRequest, response: ServerResponse): any;
+    mkworkspace(request: ABRequest, response: ServerResponse): any;
+    move(request: ABRequest, response: ServerResponse): any;
+    options(request: ABRequest, response: ServerResponse): any;
+    orderpatch(request: ABRequest, response: ServerResponse): any;
+    patch(request: ABRequest, response: ServerResponse): any;
+    post(request: ABRequest, response: ServerResponse): any;
+    pri(request: ABRequest, response: ServerResponse): any;
+    propfind(request: ABRequest, response: ServerResponse): any;
+    proppatch(request: ABRequest, response: ServerResponse): any;
+    put(request: ABRequest, response: ServerResponse): any;
+    rebind(request: ABRequest, response: ServerResponse): any;
+    report(request: ABRequest, response: ServerResponse): any;
+    search(request: ABRequest, response: ServerResponse): any;
+    trace(request: ABRequest, response: ServerResponse): any;
+    unbind(request: ABRequest, response: ServerResponse): any;
+    uncheckout(request: ABRequest, response: ServerResponse): any;
+    unlink(request: ABRequest, response: ServerResponse): any;
+    unlock(request: ABRequest, response: ServerResponse): any;
+    update(request: ABRequest, response: ServerResponse): any;
+    updateredirectref(request: ABRequest, response: ServerResponse): any;
+    versioncontrol(request: ABRequest, response: ServerResponse): any;
+    allMethods(request: ABRequest, response: ServerResponse): any;
 }
