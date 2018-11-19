@@ -1,4 +1,4 @@
-import { IncomingMessage, ServerResponse } from 'http';
+import { IncomingMessage, ServerResponse, Server } from 'http';
 import { Socket } from 'net'
 import { TLSSocket } from 'tls';
 import { Stats } from 'fs';
@@ -9,7 +9,7 @@ import { Stats } from 'fs';
 
 // Global constants
 const CLASSNAME: string = 'ABHttpServer'
-const VERSION: string   = '2.1.0'           //TODO: Class version number
+const VERSION: string   = '2.1.x'           //TODO: Class version number
 
 // Define request object to be passed to every user method
 export type ABRequest = {
@@ -47,8 +47,8 @@ export abstract class ABHttpServer {
 
   private DEBUG: boolean    = (process.env.AB_DEBUG === 'true') ? true : false
   private httpServer: any   = null
-  private httpsServer: any  = null
-  private httpHeaders: any  = {}
+  private httpsServer: any = null
+  private httpHeaders: Object = {}
   private isActive: boolean = false
 
   // Server statistics object to be returned to the user via getStatistics()
@@ -91,14 +91,14 @@ export abstract class ABHttpServer {
    */
   constructor(httpPort: number = 0, httpsPort: number = 0) {
 
-    this.DEBUG ? this.logDebug(`Object constructor called (${httpPort}, ${httpsPort})`) : true
+    this.DEBUG ? this.logDebug(`Class version ${VERSION} constructor called (${httpPort}, ${httpsPort})`) : true
 
     const http = require('http')
     const https = require('http2')
     const fs = require('fs')
     const path = require('path')
     const os = require('os') 
-   
+
     // Complete statistic object
     this.httpStatistics.server.hostname = os.hostname()
     this.httpStatistics.server.cpuArchitecture = os.arch()
@@ -160,13 +160,14 @@ export abstract class ABHttpServer {
   toString(): string {
     let status: string = ''
 
-    status += `Hostname: ${this.httpStatistics.server.hostname}, `
+    status += `Class: ${CLASSNAME}, `
+    status += `Host: ${this.httpStatistics.server.hostname}, `
     status += `HTTP: ${this.httpServer ? 'true' : 'false'}, `
     status += `HTTPS: ${this.httpsServer ? 'true' : 'false'}, `
     status += `Active: ${this.isActive ? 'true' : 'false'}, `
     status += `AB_DEBUG: ${this.DEBUG ? 'true' : 'false'}`
     
-    return `${CLASSNAME}[${status}]`
+    return `[${status}]`
   }
 
   /**
@@ -196,73 +197,79 @@ export abstract class ABHttpServer {
     const tlsConnection: boolean = (server.constructor.name === 'Http2SecureServer') ? true : false
       
     // Establish <net.Server/http.Server> events
-    server.on('checkContinue', (request: IncomingMessage, response: ServerResponse) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} "100-continue" received`) : true
-    })
-    server.on('checkExpectation', (request: IncomingMessage, response: ServerResponse) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} expect header received`) : true
-    })
     server.on('clientError', (error: Error, socket: Socket) => {
       this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client error: ${error}`) : true
       this.clientError(error, socket)
     })
-    server.on('close', () => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server closed`) : true
-    })
-    server.on('connect', (request: IncomingMessage, socket: Socket, head: Buffer) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client connect received`) : true
-    })
-    server.on('connection', (socket: Socket) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client connected`) : true
-    })
-    server.on('error', (error: Error) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} error received: ${error}`) : true
-    })
-    server.on('listening', () => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server is listening`) : true
-    })
-    server.on('request', (request: IncomingMessage, response: ServerResponse) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client request received`) : true
-    })
-    server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client upgrade received`) : true
-    })
+
+    if (this.DEBUG) {
+      server.on('checkContinue', (request: IncomingMessage, response: ServerResponse) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} "100-continue" received`)
+      })
+      server.on('checkExpectation', (request: IncomingMessage, response: ServerResponse) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} expect header received`)
+      })
+      server.on('close', () => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server closed`)
+      })
+      server.on('connect', (request: IncomingMessage, socket: Socket, head: Buffer) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client connect received`)
+      })
+      server.on('connection', (socket: Socket) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client connected`)
+      })
+      server.on('error', (error: Error) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} error received: ${error}`)
+      })
+      server.on('listening', () => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server is listening`)
+      })
+      server.on('request', (request: IncomingMessage, response: ServerResponse) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client request received`)
+      })
+      server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client upgrade received`)
+      })
+    }
 
     // Establish <tls.Server/Http2SecureServer> events
-    server.on('newSession', (sessionId: any, sessionData: any, callback: Function) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} TLS session established`) : true
-      callback()
-    })
-    server.on('OCSPRequest', (certificate: Buffer, issuer: Buffer, callback: Function) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client sent certificate status request`) : true
-      callback()
-    })
-    server.on('resumeSession', (sessionId: any, callback: Function) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client sent TLS session resume request`) : true
-      callback()
-    })
-    server.on('secureConnection', (tlsSocket: TLSSocket) => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} completed TLS handshaking`) : true
-    })
     server.on('tlsClientError', (error: Error, socket: TLSSocket) => {
       this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} error received before successful connection: ${error}`) : true
       this.clientError(error, socket)
     })
-    server.on('session', () => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} HTTP2 session created`) : true
-    })
-    server.on('sessionError', () => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} session error occurred`) : true
-    })
-    server.on('stream', () => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} stream event occurred`) : true
-    })
-    server.on('timeout', () => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server is idle`) : true
-    })
-    server.on('unknownProtocol', () => {
-      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client failed protocol negotiation`) : true
-    })
+
+    if (this.DEBUG) {
+      server.on('newSession', (sessionId: any, sessionData: any, callback: Function) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} TLS session established`)
+        callback()
+      })
+      server.on('OCSPRequest', (certificate: Buffer, issuer: Buffer, callback: Function) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client sent certificate status request`)
+        callback()
+      })
+      server.on('resumeSession', (sessionId: any, callback: Function) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client sent TLS session resume request`)
+        callback()
+      })
+      server.on('secureConnection', (tlsSocket: TLSSocket) => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} completed TLS handshaking`)
+      })
+      server.on('session', () => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} HTTP2 session created`)
+      })
+      server.on('sessionError', () => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} session error occurred`)
+      })
+      server.on('stream', () => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} stream event occurred`)
+      })
+      server.on('timeout', () => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server is idle`)
+      })
+      server.on('unknownProtocol', () => {
+        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client failed protocol negotiation`)
+      })
+    }
 
     // Start the server
     server.listen(port, () => {
@@ -283,45 +290,46 @@ export abstract class ABHttpServer {
     // Supported HTTP methods based upon HTTP Method Registry at
     // http://www.iana.org/assignments/http-methods/http-methods.xhtml
     const httpMethods = {
-      'acl': () => { this.acl(requestData, response) },
-      'baseline-control': () => { this.baselinecontrol(requestData, response) },
-      'bind': () => { this.bind(requestData, response) },
-      'checkin': () => { this.checkin(requestData, response) },
-      'checkout': () => { this.checkout(requestData, response) },
-      'connect': () => { this.connect(requestData, response) },
-      'copy': () => { this.copy(requestData, response) },
-      'delete': () => { this.delete(requestData, response) },
-      'get': () => { this.get(requestData, response) },
-      'head': () => { this.head(requestData, response) },
-      'label': () => { this.label(requestData, response) },
-      'link': () => { this.link(requestData, response) },
-      'lock': () => { this.lock(requestData, response) },
-      'merge': () => { this.merge(requestData, response) },
-      'mkactivity': () => { this.mkactivity(requestData, response) },
-      'mkcalendar': () => { this.mkcalendar(requestData, response) },
-      'mkcol': () => { this.mkcol(requestData, response) },
-      'mkredirectref': () => { this.mkredirectref(requestData, response) },
-      'mkworkspace': () => { this.mkworkspace(requestData, response) },
-      'move': () => { this.move(requestData, response) },
-      'options': () => { this.options(requestData, response) },
-      'orderpatch': () => { this.orderpatch(requestData, response) },
-      'patch': () => { this.patch(requestData, response) },
-      'post': () => { this.post(requestData, response) },
-      'pri': () => { this.pri(requestData, response) },
-      'propfind': () => { this.propfind(requestData, response) },
-      'proppatch': () => { this.proppatch(requestData, response) },
-      'put': () => { this.put(requestData, response) },
-      'rebind': () => { this.rebind(requestData, response) },
-      'report': () => { this.report(requestData, response) },
-      'search': () => { this.search(requestData, response) },
-      'trace': () => { this.trace(requestData, response) },
-      'unbind': () => { this.unbind(requestData, response) },
-      'uncheckout': () => { this.uncheckout(requestData, response) },
-      'unlink': () => { this.unlink(requestData, response) },
-      'unlock': () => { this.unlock(requestData, response) },
-      'update': () => { this.update(requestData, response) },
-      'updateredirectref': () => { this.updateredirectref(requestData, response) },
-      'version-control': () => { this.versioncontrol(requestData, response) },
+      'acl': () => { return (this.acl(requestData, response)) },
+      'baseline-control': () => { return (this.baselinecontrol(requestData, response)) },
+      'bind': () => { return (this.bind(requestData, response)) },
+      'checkin': () => { return (this.checkin(requestData, response)) },
+      'checkout': () => { return (this.checkout(requestData, response)) },
+      'connect': () => { return (this.connect(requestData, response)) },
+      'copy': () => { return (this.copy(requestData, response)) },
+      'delete': () => { return (this.delete(requestData, response)) },
+      'get': () => { return (this.get(requestData, response)) },
+      'head': () => { return (this.head(requestData, response)) },
+      'label': () => { return (this.label(requestData, response)) },
+      'link': () => { return (this.link(requestData, response)) },
+      'lock': () => { return (this.lock(requestData, response)) },
+      'merge': () => { return (this.merge(requestData, response)) },
+      'mkactivity': () => { return (this.mkactivity(requestData, response)) },
+      'mkcalendar': () => { return (this.mkcalendar(requestData, response)) },
+      'mkcol': () => { return (this.mkcol(requestData, response)) },
+      'mkredirectref': () => { return (this.mkredirectref(requestData, response)) },
+      'mkworkspace': () => { return (this.mkworkspace(requestData, response)) },
+      'move': () => { return (this.move(requestData, response)) },
+      'options': () => { return (this.options(requestData, response)) },
+      'orderpatch': () => { return (this.orderpatch(requestData, response)) },
+      'patch': () => { return (this.patch(requestData, response)) },
+      'post': () => { return (this.post(requestData, response)) },
+      'pri': () => { return (this.pri(requestData, response)) },
+      'propfind': () => { return (this.propfind(requestData, response)) },
+      'proppatch': () => { return (this.proppatch(requestData, response)) },
+      'put': () => { return (this.put(requestData, response)) },
+      'rebind': () => { return (this.rebind(requestData, response)) },
+      'report': () => { return (this.report(requestData, response)) },
+      'search': () => { return (this.search(requestData, response)) },
+      'trace': () => { return (this.trace(requestData, response)) },
+      'unbind': () => { return (this.unbind(requestData, response)) },
+      'uncheckout': () => { return (this.uncheckout(requestData, response)) },
+      'unlink': () => { return (this.unlink(requestData, response)) },
+      'unlock': () => { return (this.unlock(requestData, response)) },
+      'update': () => { return (this.update(requestData, response)) },
+      'updateredirectref': () => { return (this.updateredirectref(requestData, response)) },
+      'version-control': () => { return (this.versioncontrol(requestData, response)) },
+      '?': () => { return(this.allMethods(requestData, response)) }
     }
 
     // Parse the url
@@ -392,19 +400,48 @@ export abstract class ABHttpServer {
         this.httpStatistics.request.http.count++
         this.httpStatistics.request.http.bytes += contentLength
       }
-      
-      // Get the specific function to handle the HTTP method
+
+      // Get the specific function to handle the HTTP method or the generic getMethods() function
+      let allMethodsCall: boolean = false
       let methodFunction: Function = (<any>httpMethods)[requestData.http.method]
 
-      // Return an HTTP 501 error if the HTTP method is not defined 
       if (typeof (methodFunction) === 'undefined') {
-        this.sendError(response, `The server does not support the HTTP method ${requestData.http.method.toUpperCase()}`, 501)
-        return
+        this.DEBUG ? this.logDebug(`Unsupported HTTP Method ${requestData.http.method.toUpperCase()} received`) : true
+        methodFunction = (<any>httpMethods)['?']
+        allMethodsCall = true
       }
 
       // Call the HTTP method function which should be overwitten/implemented by the users subclass
-      // If the user does not overwrite the default function, an HTTP 501 error will be sent
-      methodFunction()
+      let returnData: boolean = methodFunction(requestData, response)
+
+      // Return if anything other than true/false returned from subclass implementation
+      if (typeof (returnData) !== 'boolean') {
+        return
+      }
+
+      // Return if the user implemented the subclass (default implementations return false)
+      if (returnData) {
+        return
+      }
+
+      // Call the allMethods() if not already done
+      if (!allMethodsCall) {
+        methodFunction = (<any>httpMethods)['?']
+        returnData = methodFunction(requestData, response)
+
+        // Return if anything other than true/false returned from subclass implementation
+        if (typeof (returnData) !== 'boolean') {
+          return
+        }
+
+        // Return if the user implemented the subclass (default implementations return false)
+        if (returnData) {
+          return
+        }
+      }
+
+      // No method implementation in user subclass - Return 501 error
+      this.sendError(response, `Missing server implementation for HTTP method ${requestData.http.method.toUpperCase()}`, 501)
     })
   }
 
@@ -497,15 +534,6 @@ export abstract class ABHttpServer {
    */
   redirectUrl(response: ServerResponse, redirectURL: string): void {
     this.sendData(response, 'text/plain', '', 301, { 'Location': redirectURL})
-  }
-  
-  /**
-   * Sends not-implemented error message to the client
-   * @param {request}       ABRequest object
-   * @param {response}      ServerResponse object
-   */
-  private sendNotImplementedError(request: ABRequest, response: ServerResponse): void {
-    this.sendError(response, `No user subclass implementation for HTTP method ${request.http.method.toUpperCase()}`, 501)
   }
 
   /**
@@ -671,7 +699,7 @@ export abstract class ABHttpServer {
    * @param {httpStatus}    HTTP Status code (default = 200)
    * @param {headers}       Additional HTTP headers (default = {})
    */
-  private sendData(response: ServerResponse, mimeType: string, text: string | Buffer, httpStatus: number = 200, headers: any = {}): void {
+  private sendData(response: ServerResponse, mimeType: string, text: string | Buffer, httpStatus: number = 200, headers: {} = {}): void {
 
     // Get length of data to be sent
     let contentLength: number = text.length
@@ -685,14 +713,14 @@ export abstract class ABHttpServer {
     // Send mandatory HTTP headers
     if (this.httpHeaders) {
       for (let key in this.httpHeaders) {
-        response.setHeader(key, this.httpHeaders[key])
+        response.setHeader(key, (<any>this.httpHeaders)[key])
       }
     }
 
     // Send passed HTTP headers
     if (headers) {
       for (let key in headers) {
-        response.setHeader(key, headers[key])
+        response.setHeader(key, (<any>headers)[key])
       }
     }
 
@@ -717,43 +745,44 @@ export abstract class ABHttpServer {
   shutdown() { }
 
   // HTTP methods which can be implemented/overwritten by the users subclass
-  acl(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  baselinecontrol(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  bind(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  checkin(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  checkout(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  connect(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  copy(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  delete(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  get(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  head(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  label(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  link(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  lock(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  merge(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  mkactivity(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  mkcalendar(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  mkcol(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  mkredirectref(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  mkworkspace(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  move(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  options(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  orderpatch(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  patch(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response)}
-  post(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  pri(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  propfind(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  proppatch(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  put(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  rebind(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  report(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  search(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  trace(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  unbind(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  uncheckout(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  unlink(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  unlock(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  update(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  updateredirectref(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
-  versioncontrol(request: ABRequest, response: ServerResponse) { this.sendNotImplementedError(request, response) }
+  acl(request: ABRequest, response: ServerResponse): any { return false }
+  baselinecontrol(request: ABRequest, response: ServerResponse): any { return false }
+  bind(request: ABRequest, response: ServerResponse): any { return false }
+  checkin(request: ABRequest, response: ServerResponse): any { return false }
+  checkout(request: ABRequest, response: ServerResponse): any { return false }
+  connect(request: ABRequest, response: ServerResponse): any { return false }
+  copy(request: ABRequest, response: ServerResponse): any { return false }
+  delete(request: ABRequest, response: ServerResponse): any { return false }
+  get(request: ABRequest, response: ServerResponse): any { return false }
+  head(request: ABRequest, response: ServerResponse): any { return false }
+  label(request: ABRequest, response: ServerResponse): any { return false }
+  link(request: ABRequest, response: ServerResponse): any { return false }
+  lock(request: ABRequest, response: ServerResponse): any { return false }
+  merge(request: ABRequest, response: ServerResponse): any { return false }
+  mkactivity(request: ABRequest, response: ServerResponse): any { return false }
+  mkcalendar(request: ABRequest, response: ServerResponse): any { return false }
+  mkcol(request: ABRequest, response: ServerResponse): any { return false }
+  mkredirectref(request: ABRequest, response: ServerResponse): any { return false }
+  mkworkspace(request: ABRequest, response: ServerResponse): any { return false }
+  move(request: ABRequest, response: ServerResponse): any { return false }
+  options(request: ABRequest, response: ServerResponse): any { return false }
+  orderpatch(request: ABRequest, response: ServerResponse): any { return false }
+  patch(request: ABRequest, response: ServerResponse): any { return false }
+  post(request: ABRequest, response: ServerResponse): any { return false }
+  pri(request: ABRequest, response: ServerResponse): any { return false }
+  propfind(request: ABRequest, response: ServerResponse): any { return false }
+  proppatch(request: ABRequest, response: ServerResponse): any { return false }
+  put(request: ABRequest, response: ServerResponse): any { return false }
+  rebind(request: ABRequest, response: ServerResponse): any { return false }
+  report(request: ABRequest, response: ServerResponse): any { return false }
+  search(request: ABRequest, response: ServerResponse): any { return false }
+  trace(request: ABRequest, response: ServerResponse): any { return false }
+  unbind(request: ABRequest, response: ServerResponse): any { return false }
+  uncheckout(request: ABRequest, response: ServerResponse): any { return false }
+  unlink(request: ABRequest, response: ServerResponse): any { return false }
+  unlock(request: ABRequest, response: ServerResponse): any { return false }
+  update(request: ABRequest, response: ServerResponse): any { return false }
+  updateredirectref(request: ABRequest, response: ServerResponse): any { return false }
+  versioncontrol(request: ABRequest, response: ServerResponse): any { return false }
+  allMethods(request: ABRequest, response: ServerResponse): any { return false }
 }
