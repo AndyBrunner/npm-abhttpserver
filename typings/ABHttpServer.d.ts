@@ -36,7 +36,6 @@ export declare abstract class ABHttpServer {
     private httpServer;
     private httpsServer;
     private httpHeaders;
-    private isActive;
     private httpStatistics;
     /**
      * Create the HTTP server
@@ -53,7 +52,7 @@ export declare abstract class ABHttpServer {
     toString(): string;
     /**
      * Return the server statistics
-     * @param {-}
+     * @param {void}
      * @returns {statistics} JSON object with server statistics
      */
     getStatistics(): {};
@@ -61,29 +60,28 @@ export declare abstract class ABHttpServer {
      * Establish server events and start the server
      * @param {server}  Server
      * @param {port}    TCP/IP port number
+     * @returns {void}
      */
     private startServer;
     /**
      * Handle all HTTP requests
      * @param {request}   IncomingMessage object
      * @param {response}  ServerResponse object
+     * @returns {void}
      */
     private processHttpRequest;
     /**
     * Write debugging data to the console
     * @param {message}  Debug message to be written
+    * @returns {void}
     */
     private logDebug;
-    /**
-     * Terminate the HTTP/HTTPS server
-     * @param {-}
-     */
-    terminate(): void;
     /**
      * Sends HTML data to the client
      * @param {response}    ServerResponse object
      * @param {text}        HTML to be sent
      * @param {httpStatus}  HTTP Status code (defaults to 200)
+     * @returns {void}
      */
     sendHTML(response: ServerResponse, text: string, httpStatus?: number): void;
     /**
@@ -91,6 +89,7 @@ export declare abstract class ABHttpServer {
      * @param {response}    ServerResponse object
      * @param {text}        Text to be sent
      * @param {httpStatus}  HTTP status code (defaults to 200)
+     * @returns {void}
      */
     sendText(response: ServerResponse, text: string, httpStatus?: number): void;
     /**
@@ -98,6 +97,7 @@ export declare abstract class ABHttpServer {
      * @param {response}    ServerResponse object
      * @param {jsonData}    JSON data to be sent
      * @param {httpStatus}  HTTP status code (defaults to 200)
+     * @returns {void}
      */
     sendJSON(response: ServerResponse, jsonData: {}, httpStatus?: number): void;
     /**
@@ -105,22 +105,33 @@ export declare abstract class ABHttpServer {
      * @param {response}      ServerResponse object
      * @param {errorMessage}  Error message
      * @param {httpStatus}    HTTP status code (defaults to 200)
+     * @returns {void}
      */
     private sendError;
     /**
      * Redirect to new URL
      * @param {response}    ServerResponse object
      * @param {string}      URL to redirect
+     * @returns {void}
      */
-    redirectUrl(response: ServerResponse, redirectURL: string): void;
+    redirectUrl(response: ServerResponse, redirectUrl: string): void;
     /**
      * Send the specified file to the client
      * @param {response}    ServerResponse object
      * @param {filePath}    File name with path
      * @param {fileRoot}    Check sanitized path with this root directory, defaults to __dirname
      * @param {mimeType}    MIME Type, default is set based on file name extension
+     * @returns {void}
      */
     sendFile(response: ServerResponse, filePath: string, fileRoot?: string, mimeType?: string): void;
+    /**
+     * Return content of a given file
+     * @param {filePath}    File name with path
+     * @param {fileRoot}    Check path with this root directory, defaults to __dirname
+     * @param {callback}    Callback function (Error, Buffer)
+     * @returns {void}
+     */
+    readFile(filePath: string, fileRoot: string, callback: Function): void;
     /**
      * Set HTTP headers to be added to every response
      *
@@ -129,6 +140,7 @@ export declare abstract class ABHttpServer {
      *                  'Access-Control-Allow-Methods': 'GET, POST, DELETE, PUT' })
      *
      * @param {httpHeaders} HTTP Headers to be added
+     * @returns {void}
      */
     setHeaders(httpHeaders: {}): void;
     /**
@@ -138,10 +150,10 @@ export declare abstract class ABHttpServer {
      * @param {text}          Data to be written
      * @param {httpStatus}    HTTP Status code (default = 200)
      * @param {headers}       Additional HTTP headers (default = {})
+     * @returns{void}
      */
     private sendData;
-    clientError(err: Error, socket: Socket): void;
-    shutdown(): void;
+    clientError(err: Error, socket: Socket | undefined): void;
     acl(request: ABRequest, response: ServerResponse): any;
     baselinecontrol(request: ABRequest, response: ServerResponse): any;
     bind(request: ABRequest, response: ServerResponse): any;

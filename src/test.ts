@@ -5,14 +5,11 @@ import { ServerResponse } from 'http';
 
 class MyServer extends ABHttpServer {
   get(request: ABRequest, response: ServerResponse) {
-    if (request.url.path == 'stats') {
-      this.sendJSON(response, this.getStatistics())
+    if (request.url.path == 'exit') {
+      this.sendText(response, "Terminate in progress")
     } else {
-      this.sendText(response, `The URL sent was ${request.url.path}`)
+      this.sendText(response, "Echo")
     }
-  }
-  post(request: ABRequest, response: ServerResponse) {
-    this.sendJSON(response, { data: `The raw data sent was ${request.http.data}` })
   }
 }
 var myServer = new MyServer(8080, 8081)

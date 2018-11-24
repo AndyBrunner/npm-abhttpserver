@@ -5,8 +5,9 @@ This abstract class can be instantiated to create a simple and easy to use HTTP 
 ## Installation
 
 ```bash
-npm install abhttpserver
+npm install typescript
 npm install @types/node
+npm install abhttpserver
 ```
 
 ## Example: HelloWorld.ts
@@ -84,18 +85,20 @@ class MyServer extends ABHttpServer {
 var myServer = new MyServer(8080, 8081)
 ```
 
-## Features and Notes
+## Features
+
+* Support for HTTP/2 over TLS with fallback to HTTP 1.1
+* Supports all HTTP methods (GET, POST, PUT, DELETE, OPTIONS, etc.) thru corresponding methods. Calls allMethods() if no corresponding function found
+* An object ABRequest is passed to every user method with various information about the HTTP request
+* Include methods for easy access to the data (Text, HTML, JSON).
+* Errors are sent back to the client as JSON objects
+* Detailed console debugging thru AB_DEBUG environment variable
+
+## Notes
 
 * This module does not require any framework or additional NPM module.
-* The object ABRequest is passed to every user method and contains information about the http request.
-* Supports all HTTP methods (GET, POST, PUT, DELETE, OPTIONS, etc.) thru corresponding methods.
-* Non-supported or non-implemented HTTP methods are handled thru the allMethods() call.
-* Support for HTTP/2 with fallback to HTTP 1.1 if necessary.
-* Includes several methods for easy access to the receiving and sending data.
 * The HTTPS server certificate and the trusted certificate chain are read from "key.pem" and
   "cert.pem". A self signed certificate is included for testing purpose.
-* Errors are sent back to the client as JSON error objects
-* Detailed debugging information for every HTTP events and data received and sent.
 
 ## Debugging
 
@@ -108,32 +111,35 @@ AB_DEBUG=true node app.js
 ## Example debug output
 
 ```text
-2018-11-18T16:16:06.819Z ABHttpServer: Class version x.x.x constructor called (8080, 8081)
-2018-11-18T16:16:06.829Z ABHttpServer: Creating HTTP server on port 8080
-2018-11-18T16:16:06.834Z ABHttpServer: Creating HTTPS server on port 8081
-2018-11-18T16:16:06.843Z ABHttpServer: HTTP server is listening
-2018-11-18T16:16:06.843Z ABHttpServer: HTTP server started on port 8080
-2018-11-18T16:16:06.843Z ABHttpServer: HTTPS server is listening
-2018-11-18T16:16:06.843Z ABHttpServer: HTTPS server started on port 8081
-2018-11-18T16:16:28.373Z ABHttpServer: HTTP client connected
-2018-11-18T16:16:28.376Z ABHttpServer: HTTP client request received
-2018-11-18T16:16:28.377Z ABHttpServer: <= HTTP/1.1 (Non-TLS) - Method GET - URL /anyUrl - Content-Length 12
-2018-11-18T16:16:28.378Z ABHttpServer: => HTTP Status 200 - Content-Length 23 - Content-Type text/plain
-2018-11-18T16:16:33.382Z ABHttpServer: HTTP server is idle
-2018-11-18T16:16:52.725Z ABHttpServer: HTTPS client connected
-2018-11-18T16:16:52.733Z ABHttpServer: HTTPS completed TLS handshaking
-2018-11-18T16:16:52.734Z ABHttpServer: HTTPS client request received
-2018-11-18T16:16:52.734Z ABHttpServer: <= HTTP/1.1 (TLSv1.2) - Method GET - URL /secureURL - Content-Length 12
-2018-11-18T16:16:52.734Z ABHttpServer: => HTTP Status 200 - Content-Length 26 - Content-Type text/plain
-2018-11-18T16:17:06.587Z ABHttpServer: HTTPS client request received
-2018-11-18T16:17:06.587Z ABHttpServer: <= HTTP/1.1 (TLSv1.2) - Method POST - URL /SomeData - Content-Length 12
-2018-11-18T16:17:06.587Z ABHttpServer: => HTTP Status 200 - Content-Length 45 - Content-Type application/json
+2018-11-24T13:46:11.196Z ABHttpServer: Class version 2.3.0 constructor called (8080, 8081)
+2018-11-24T13:46:11.206Z ABHttpServer: Creating HTTP server on port 8080
+2018-11-24T13:46:11.211Z ABHttpServer: Creating HTTPS server on port 8081
+2018-11-24T13:46:11.221Z ABHttpServer: HTTP server is listening
+2018-11-24T13:46:11.221Z ABHttpServer: HTTP server started on port 8080
+2018-11-24T13:46:11.221Z ABHttpServer: HTTPS server is listening
+2018-11-24T13:46:11.221Z ABHttpServer: HTTPS server started on port 8081
+2018-11-24T13:46:18.029Z ABHttpServer: HTTP client ::1 connected
+2018-11-24T13:46:18.032Z ABHttpServer: HTTP client ::1 connected
+2018-11-24T13:46:18.034Z ABHttpServer: HTTP client ::1 request received
+2018-11-24T13:46:18.035Z ABHttpServer: <= Client ::1, HTTP/1.1 Non-TLS, GET /exit, Data 12 bytes
+2018-11-24T13:46:18.036Z ABHttpServer: Method sendFile(*, exit, *, ) called
+2018-11-24T13:46:18.036Z ABHttpServer: Method readFile(exit, *, *) called
+2018-11-24T13:46:18.036Z ABHttpServer: Method sendJSON(*, *, 500) called
+2018-11-24T13:46:18.036Z ABHttpServer: => Client ::1, HTTP 500, Data application/json 137 bytes
+2018-11-24T13:46:23.043Z ABHttpServer: HTTP server is idle
+2018-11-24T13:46:59.472Z ABHttpServer: HTTP client ::1 request received
+2018-11-24T13:46:59.472Z ABHttpServer: <= Client ::1, HTTP/1.1 Non-TLS, GET /cert.pem, Data 12 bytes
+2018-11-24T13:46:59.472Z ABHttpServer: Method sendFile(*, cert.pem, *, ) called
+2018-11-24T13:46:59.472Z ABHttpServer: Method readFile(cert.pem, *, *) called
+2018-11-24T13:46:59.473Z ABHttpServer: => Client ::1, HTTP 200, Data text/plain 2078 bytes
+2018-11-24T13:47:04.478Z ABHttpServer: HTTP server is idle
+
 ```
 
 ## Prerequisits
 
 * Node.js 10.10+ (HTTP/2 requirement)
-* npm install @types/node
+* Typescript
 
 ## Unlicense
 

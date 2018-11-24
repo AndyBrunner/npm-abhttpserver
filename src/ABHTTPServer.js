@@ -3,10 +3,10 @@ exports.__esModule = true;
 var tls_1 = require("tls");
 /**
  * Simple HTTP Server Framework
-*/
+ */
 // Global constants
 var CLASSNAME = 'ABHttpServer';
-var VERSION = '2.2.0'; //TODO: Class version number
+var VERSION = '2.3.0'; //TODO: Class version number
 /**
  * Abstract class to be implemented/subclassed by the user
 */
@@ -25,7 +25,6 @@ var ABHttpServer = /** @class */ (function () {
         this.httpServer = null;
         this.httpsServer = null;
         this.httpHeaders = {};
-        this.isActive = false;
         // Server statistics object to be returned to the user via getStatistics()
         this.httpStatistics = {
             server: {
@@ -34,6 +33,8 @@ var ABHttpServer = /** @class */ (function () {
                 startTime: new Date().toISOString(),
                 startArguments: process.argv,
                 nodeVersion: process.version,
+                httpPort: 0,
+                httpsPort: 0,
                 hostname: '',
                 osPlatform: '',
                 osType: '',
@@ -82,6 +83,9 @@ var ABHttpServer = /** @class */ (function () {
         if (httpPort === 0 && httpsPort === 0) {
             throw new RangeError(CLASSNAME + ": At least one port must be non-zero");
         }
+        // Save the HTTP/S port numbers
+        this.httpStatistics.server.httpPort = httpPort;
+        this.httpStatistics.server.httpsPort = httpsPort;
         // Start the HTTP server
         if (httpPort !== 0) {
             this.DEBUG ? this.logDebug("Creating HTTP server on port " + httpPort) : true;
@@ -103,8 +107,6 @@ var ABHttpServer = /** @class */ (function () {
             });
             this.startServer(this.httpsServer, httpsPort);
         }
-        // Mark server active
-        this.isActive = true;
     }
     /**
      * Return string of object
@@ -112,22 +114,25 @@ var ABHttpServer = /** @class */ (function () {
      * @returns {string} String representation of ABHttpServer object
      */
     ABHttpServer.prototype.toString = function () {
+        this.DEBUG ? this.logDebug("Method toString() called") : true;
         var status = '';
         status += "Class: " + CLASSNAME + ", ";
         status += "Host: " + this.httpStatistics.server.hostname + ", ";
         status += "HTTP: " + (this.httpServer ? 'true' : 'false') + ", ";
-        status += "HTTPS: " + (this.httpsServer ? 'true' : 'false') + ", ";
-        status += "Active: " + (this.isActive ? 'true' : 'false') + ", ";
-        status += "AB_DEBUG: " + (this.DEBUG ? 'true' : 'false');
+        status += this.httpServer ? "HTTP Port: " + this.httpStatistics.server.httpPort + ", " : '',
+            status += "HTTPS: " + (this.httpsServer ? 'true' : 'false') + ", ";
+        status += this.httpsServer ? "HTTPS Port: " + this.httpStatistics.server.httpsPort + ", " : '',
+            status += "AB_DEBUG: " + (this.DEBUG ? 'true' : 'false');
         return "[" + status + "]";
     };
     /**
      * Return the server statistics
-     * @param {-}
+     * @param {void}
      * @returns {statistics} JSON object with server statistics
      */
     ABHttpServer.prototype.getStatistics = function () {
-        // Update statistics
+        this.DEBUG ? this.logDebug("Method getStatistics() called") : true;
+        // Update statistics and return it to the caller
         var cpuUsage = process.cpuUsage();
         this.httpStatistics.server.cpuUsageUserSec = cpuUsage.user / 1000000;
         this.httpStatistics.server.cpuUsageSystemSec = cpuUsage.system / 1000000;
@@ -137,6 +142,7 @@ var ABHttpServer = /** @class */ (function () {
      * Establish server events and start the server
      * @param {server}  Server
      * @param {port}    TCP/IP port number
+     * @returns {void}
      */
     ABHttpServer.prototype.startServer = function (server, port) {
         var _this = this;
@@ -146,6 +152,10 @@ var ABHttpServer = /** @class */ (function () {
         server.on('clientError', function (error, socket) {
             _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + socket.remoteAddress + "\u00A0error: " + error) : true;
             _this.clientError(error, socket);
+        });
+        server.on('error', function (error) {
+            _this.DEBUG ? _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " error received: " + error) : true;
+            _this.clientError(error, undefined);
         });
         if (this.DEBUG) {
             server.on('checkContinue', function (request, response) {
@@ -162,9 +172,6 @@ var ABHttpServer = /** @class */ (function () {
             });
             server.on('connection', function (socket) {
                 _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " client " + socket.remoteAddress + "\u00A0connected");
-            });
-            server.on('error', function (error) {
-                _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " error received: " + error);
             });
             server.on('listening', function () {
                 _this.logDebug("HTTP" + (tlsConnection ? 'S' : '') + " server is listening");
@@ -222,13 +229,13 @@ var ABHttpServer = /** @class */ (function () {
      * Handle all HTTP requests
      * @param {request}   IncomingMessage object
      * @param {response}  ServerResponse object
+     * @returns {void}
      */
     ABHttpServer.prototype.processHttpRequest = function (request, response) {
         var _this = this;
         var url = require('url');
         var StringDecoder = require('string_decoder').StringDecoder;
-        // Supported HTTP methods based upon HTTP Method Registry at
-        // http://www.iana.org/assignments/http-methods/http-methods.xhtml
+        // Supported HTTP methods (see www.iana.org/assignments/http-methods/http-methods.xhtml)
         var httpMethods = {
             'acl': function () { return (_this.acl(requestData, response)); },
             'baseline-control': function () { return (_this.baselinecontrol(requestData, response)); },
@@ -273,10 +280,10 @@ var ABHttpServer = /** @class */ (function () {
         };
         // Parse the url
         var parsedUrl = url.parse(request.url);
-        // Build a container holding all the data of the request
+        // Build an object holding all the data of the request
         var requestData = {
             'server': {
-                'hostname': this.httpStatistics.server.hostname,
+                'hostname': request.headers.host || this.httpStatistics.server.hostname,
                 'address': request.socket.localAddress || '',
                 'port': request.socket.localPort.toString() || ''
             },
@@ -301,7 +308,14 @@ var ABHttpServer = /** @class */ (function () {
                 'query': {}
             }
         };
-        // Construct key/value object from HTTP querystring (if present)
+        // Set hostname
+        if (request.headers.host) {
+            requestData.server.hostname = request.headers.host.substr(0, request.headers.host.indexOf(':'));
+        }
+        else {
+            requestData.server.hostname = this.httpStatistics.server.hostname;
+        }
+        // Construct key/value object from URL querystring (if present)
         if (parsedUrl.query) {
             var keyvalues = parsedUrl.query.split('&');
             for (var index = 0; index < keyvalues.length; index++) {
@@ -322,7 +336,7 @@ var ABHttpServer = /** @class */ (function () {
         request.on('end', function () {
             requestData.http.data += decoder.end();
             var contentLength = requestData.http.data.length;
-            _this.DEBUG ? _this.logDebug("<= Client " + requestData.client.address + "\u00A0HTTP/" + requestData.http.version + " (" + (requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS') + ") - " + requestData.http.method.toUpperCase() + " - URL /" + requestData.url.path + " - " + contentLength + " bytes") : true;
+            _this.DEBUG ? _this.logDebug("<= Client " + requestData.client.address + ", HTTP/" + requestData.http.version + " " + (requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS') + ", " + requestData.http.method.toUpperCase() + " /" + requestData.url.path + ", Data " + contentLength + " bytes") : true;
             // Update statistics
             if (requestData.http.tls) {
                 _this.httpStatistics.request.https.count++;
@@ -336,7 +350,7 @@ var ABHttpServer = /** @class */ (function () {
             var allMethodsCall = false;
             var methodFunction = httpMethods[requestData.http.method];
             if (typeof (methodFunction) === 'undefined') {
-                _this.DEBUG ? _this.logDebug("Client " + requestData.client.address + " sent unsupported HTTP Method " + requestData.http.method.toUpperCase() + " received") : true;
+                _this.DEBUG ? _this.logDebug("Client " + requestData.client.address + " sent unsupported HTTP Method " + requestData.http.method.toUpperCase()) : true;
                 methodFunction = httpMethods['?'];
                 allMethodsCall = true;
             }
@@ -370,40 +384,21 @@ var ABHttpServer = /** @class */ (function () {
     /**
     * Write debugging data to the console
     * @param {message}  Debug message to be written
+    * @returns {void}
     */
     ABHttpServer.prototype.logDebug = function (message) {
         this.DEBUG ? console.debug(new Date().toISOString() + " " + CLASSNAME + ": " + message) : true;
-    };
-    /**
-     * Terminate the HTTP/HTTPS server
-     * @param {-}
-     */
-    ABHttpServer.prototype.terminate = function () {
-        if (!this.isActive) {
-            return;
-        }
-        this.DEBUG ? this.logDebug('Method terminate() called') : true;
-        if (this.httpServer) {
-            this.httpServer.close();
-            this.httpServer = null;
-        }
-        if (this.httpsServer) {
-            this.httpsServer.close();
-            this.httpsServer = null;
-        }
-        // Mark server inactive
-        this.isActive = false;
-        // Call user method (if present)
-        this.shutdown();
     };
     /**
      * Sends HTML data to the client
      * @param {response}    ServerResponse object
      * @param {text}        HTML to be sent
      * @param {httpStatus}  HTTP Status code (defaults to 200)
+     * @returns {void}
      */
     ABHttpServer.prototype.sendHTML = function (response, text, httpStatus) {
         if (httpStatus === void 0) { httpStatus = 200; }
+        this.DEBUG ? this.logDebug("Method sendHTML(*, *, " + httpStatus + ") called") : true;
         this.sendData(response, 'text/html', text, httpStatus);
     };
     /**
@@ -411,9 +406,11 @@ var ABHttpServer = /** @class */ (function () {
      * @param {response}    ServerResponse object
      * @param {text}        Text to be sent
      * @param {httpStatus}  HTTP status code (defaults to 200)
+     * @returns {void}
      */
     ABHttpServer.prototype.sendText = function (response, text, httpStatus) {
         if (httpStatus === void 0) { httpStatus = 200; }
+        this.DEBUG ? this.logDebug("Method sendText(*, *, " + httpStatus + ") called") : true;
         this.sendData(response, 'text/plain', text, httpStatus);
     };
     /**
@@ -421,9 +418,11 @@ var ABHttpServer = /** @class */ (function () {
      * @param {response}    ServerResponse object
      * @param {jsonData}    JSON data to be sent
      * @param {httpStatus}  HTTP status code (defaults to 200)
+     * @returns {void}
      */
     ABHttpServer.prototype.sendJSON = function (response, jsonData, httpStatus) {
         if (httpStatus === void 0) { httpStatus = 200; }
+        this.DEBUG ? this.logDebug("Method sendJSON(*, *, " + httpStatus + ") called") : true;
         this.sendData(response, 'application/json', JSON.stringify(jsonData), httpStatus);
     };
     /**
@@ -431,23 +430,27 @@ var ABHttpServer = /** @class */ (function () {
      * @param {response}      ServerResponse object
      * @param {errorMessage}  Error message
      * @param {httpStatus}    HTTP status code (defaults to 200)
+     * @returns {void}
      */
     ABHttpServer.prototype.sendError = function (response, errorMessage, httpStatus) {
         if (httpStatus === void 0) { httpStatus = 200; }
         this.sendJSON(response, {
-            'time': new Date().toISOString(),
             'httpStatus': httpStatus,
+            'error': errorMessage,
             'component': CLASSNAME,
-            'error': errorMessage
+            'version:': VERSION,
+            'time': new Date().toISOString()
         }, httpStatus);
     };
     /**
      * Redirect to new URL
      * @param {response}    ServerResponse object
      * @param {string}      URL to redirect
+     * @returns {void}
      */
-    ABHttpServer.prototype.redirectUrl = function (response, redirectURL) {
-        this.sendData(response, 'text/plain', '', 301, { 'Location': redirectURL });
+    ABHttpServer.prototype.redirectUrl = function (response, redirectUrl) {
+        this.DEBUG ? this.logDebug("Method redirectUrl(*, " + redirectUrl + ") called") : true;
+        this.sendData(response, 'text/plain', '', 301, { 'Location': redirectUrl });
     };
     /**
      * Send the specified file to the client
@@ -455,13 +458,14 @@ var ABHttpServer = /** @class */ (function () {
      * @param {filePath}    File name with path
      * @param {fileRoot}    Check sanitized path with this root directory, defaults to __dirname
      * @param {mimeType}    MIME Type, default is set based on file name extension
+     * @returns {void}
      */
     ABHttpServer.prototype.sendFile = function (response, filePath, fileRoot, mimeType) {
         var _this = this;
         if (fileRoot === void 0) { fileRoot = __dirname; }
         if (mimeType === void 0) { mimeType = ''; }
+        this.DEBUG ? this.logDebug("Method sendFile(*, " + filePath + ", *, " + mimeType + ") called") : true;
         var path = require('path');
-        var fs = require('fs');
         // File extention to MIME types mapping
         var mimeTypes = {
             '.aac': 'audio/aac',
@@ -534,49 +538,72 @@ var ABHttpServer = /** @class */ (function () {
             '.3g2': 'video/3gpp2',
             '.7z': 'application/x-7z-compressed'
         };
-        // Check for poison null bytes attack - Return 400 Bad Request
+        // Get content of the file
+        this.readFile(filePath, fileRoot = __dirname, function (readError, data) {
+            // Check if file could be read
+            if (readError) {
+                _this.sendError(response, readError.message, 500);
+                return;
+            }
+            // Set the MIME type corresponding to the file name if not specified
+            if (mimeType === '') {
+                var fileExtension = path.parse(filePath).ext.toLowerCase();
+                mimeType = mimeTypes[fileExtension] || 'text/plain';
+            }
+            // Send the file with a matching content type
+            _this.sendData(response, mimeType, data);
+        });
+    };
+    /**
+     * Return content of a given file
+     * @param {filePath}    File name with path
+     * @param {fileRoot}    Check path with this root directory, defaults to __dirname
+     * @param {callback}    Callback function (Error, Buffer)
+     * @returns {void}
+     */
+    ABHttpServer.prototype.readFile = function (filePath, fileRoot, callback) {
+        if (fileRoot === void 0) { fileRoot = __dirname; }
+        this.DEBUG ? this.logDebug("Method readFile(" + filePath + ", *, *) called") : true;
+        var path = require('path');
+        var fs = require('fs');
+        // Check for poison null bytes attack
         if (filePath.indexOf('\0') !== -1) {
-            this.sendError(response, "The filename " + filePath + " contains invalid characters", 400);
+            callback(new Error("The filename " + filePath + " contains invalid characters"));
             return;
         }
         // Normalize the filepath
         var filePathNormalized = path.resolve(filePath);
         // Check for empty or missing file name
         if (filePath === '') {
-            this.sendError(response, "No filename specified", 400);
+            callback(new Error("No filename specified"));
             return;
         }
-        // Check if file path is outside of the base path - Return 400 Bad Request
+        // Check if file path is outside of the base path
         if (filePathNormalized.indexOf(fileRoot) === -1) {
-            this.sendError(response, "The file " + filePath + " is outside of the base directory", 400);
+            callback(new Error("The file " + filePath + " is outside of the base directory"));
             return;
         }
         // Get file statistics
         fs.stat(filePathNormalized, function (fileError, fileStats) {
-            // Check if file exist - Return 404 Bad Request
+            // Check if file exist
             if (fileError) {
-                _this.sendError(response, "The file " + filePath + " does not exist", 404);
+                callback(new Error("The file " + filePath + " does not exist"));
                 return;
             }
-            // Check if file is a directory - Return 400 Bad Request
+            // Check if file is a directory
             if (fileStats.isDirectory()) {
-                _this.sendError(response, "The file " + filePath + " specifies a directory", 400);
+                callback(new Error("The file " + filePath + " specifies a directory"));
                 return;
             }
             // Read content of file
             fs.readFile(filePathNormalized, function (readError, data) {
-                // File can not be read - Return 500 (Internal Server Error)
+                // File can not be read
                 if (readError) {
-                    _this.sendError(response, "The file " + filePath + " could not be read", 500);
+                    callback(new Error("The file " + filePath + " could not be read"));
                     return;
                 }
-                // Set the MIME type corresponding to the file name if not specified
-                if (mimeType === '') {
-                    var fileExtension = path.parse(filePathNormalized).ext.toLowerCase();
-                    mimeType = mimeTypes[fileExtension] || 'text/plain';
-                }
-                // Send the file with a matching content type
-                _this.sendData(response, mimeType, data);
+                // Return the file content to the caller
+                callback(false, data);
             });
         });
     };
@@ -588,9 +615,10 @@ var ABHttpServer = /** @class */ (function () {
      *                  'Access-Control-Allow-Methods': 'GET, POST, DELETE, PUT' })
      *
      * @param {httpHeaders} HTTP Headers to be added
+     * @returns {void}
      */
     ABHttpServer.prototype.setHeaders = function (httpHeaders) {
-        this.DEBUG ? this.logDebug("Invoked method setHeaders(" + httpHeaders + ")") : true;
+        this.DEBUG ? this.logDebug("Method setHeaders() called") : true;
         this.httpHeaders = httpHeaders;
         return;
     };
@@ -601,23 +629,21 @@ var ABHttpServer = /** @class */ (function () {
      * @param {text}          Data to be written
      * @param {httpStatus}    HTTP Status code (default = 200)
      * @param {headers}       Additional HTTP headers (default = {})
+     * @returns{void}
      */
     ABHttpServer.prototype.sendData = function (response, mimeType, text, httpStatus, headers) {
         if (httpStatus === void 0) { httpStatus = 200; }
         if (headers === void 0) { headers = {}; }
         // Get length of data to be sent
         var contentLength = text.length;
-        this.DEBUG ? this.logDebug("=> Client " + response.connection.remoteAddress + " Status " + httpStatus + " - " + contentLength + " bytes - Type " + mimeType) : true;
-        if (!this.isActive) {
-            return;
-        }
+        this.DEBUG ? this.logDebug("=> Client " + response.connection.remoteAddress + ", HTTP " + httpStatus + ", Data " + mimeType + " " + contentLength + " bytes") : true;
         // Send mandatory HTTP headers
         if (this.httpHeaders) {
             for (var key in this.httpHeaders) {
                 response.setHeader(key, this.httpHeaders[key]);
             }
         }
-        // Send passed HTTP headers
+        // Send passed additional HTTP headers
         if (headers) {
             for (var key in headers) {
                 response.setHeader(key, headers[key]);
@@ -634,11 +660,9 @@ var ABHttpServer = /** @class */ (function () {
         // Update the statistics
         this.httpStatistics.response.count++;
         this.httpStatistics.response.bytes += contentLength;
-        return;
     };
     // Event method which can be implemented/overwritten by the users subclass
     ABHttpServer.prototype.clientError = function (err, socket) { };
-    ABHttpServer.prototype.shutdown = function () { };
     // HTTP methods which can be implemented/overwritten by the users subclass
     ABHttpServer.prototype.acl = function (request, response) { return false; };
     ABHttpServer.prototype.baselinecontrol = function (request, response) { return false; };

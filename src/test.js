@@ -21,15 +21,12 @@ var MyServer = /** @class */ (function (_super) {
         return _super !== null && _super.apply(this, arguments) || this;
     }
     MyServer.prototype.get = function (request, response) {
-        if (request.url.path == 'stats') {
-            this.sendJSON(response, this.getStatistics());
+        if (request.url.path == 'exit') {
+            this.sendText(response, "Terminate in progress");
         }
         else {
-            this.sendText(response, "The URL sent was " + request.url.path);
+            this.sendText(response, "Echo");
         }
-    };
-    MyServer.prototype.post = function (request, response) {
-        this.sendJSON(response, { data: "The raw data sent was " + request.http.data });
     };
     return MyServer;
 }(ABHttpServer_1.ABHttpServer));

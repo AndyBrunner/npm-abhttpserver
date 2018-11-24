@@ -5,11 +5,11 @@ import { Stats } from 'fs';
 
 /**
  * Simple HTTP Server Framework
-*/
+ */
 
 // Global constants
 const CLASSNAME: string = 'ABHttpServer'
-const VERSION: string   = '2.2.0'           //TODO: Class version number
+const VERSION: string   = '2.3.0'           //TODO: Class version number
 
 // Define request object to be passed to every user method
 export type ABRequest = {
@@ -45,11 +45,10 @@ export type ABRequest = {
 */
 export abstract class ABHttpServer {
 
-  private DEBUG: boolean    = (process.env.AB_DEBUG === 'true') ? true : false
-  private httpServer: any   = null
-  private httpsServer: any = null
+  private DEBUG: boolean      = (process.env.AB_DEBUG === 'true') ? true : false
+  private httpServer: any     = null
+  private httpsServer: any    = null
   private httpHeaders: Object = {}
-  private isActive: boolean = false
 
   // Server statistics object to be returned to the user via getStatistics()
   private httpStatistics = {
@@ -59,6 +58,8 @@ export abstract class ABHttpServer {
       startTime: new Date().toISOString(),
       startArguments: process.argv,
       nodeVersion: process.version,
+      httpPort: 0,
+      httpsPort: 0,
       hostname: '',
       osPlatform: '',
       osType: '',
@@ -119,7 +120,11 @@ export abstract class ABHttpServer {
     if (httpPort === 0 && httpsPort === 0) {
       throw new RangeError(`${CLASSNAME}: At least one port must be non-zero`)
     }
-        
+    
+    // Save the HTTP/S port numbers
+    this.httpStatistics.server.httpPort = httpPort
+    this.httpStatistics.server.httpsPort = httpsPort
+
     // Start the HTTP server
     if (httpPort !== 0) {
 
@@ -147,9 +152,6 @@ export abstract class ABHttpServer {
       })
       this.startServer(this.httpsServer, httpsPort)
     }
-
-    // Mark server active
-    this.isActive = true
   }
 
   /**
@@ -158,13 +160,17 @@ export abstract class ABHttpServer {
    * @returns {string} String representation of ABHttpServer object
    */
   toString(): string {
+    
+    this.DEBUG ? this.logDebug(`Method toString() called`) : true
+
     let status: string = ''
 
     status += `Class: ${CLASSNAME}, `
     status += `Host: ${this.httpStatistics.server.hostname}, `
     status += `HTTP: ${this.httpServer ? 'true' : 'false'}, `
+    status += this.httpServer ? `HTTP Port: ${this.httpStatistics.server.httpPort}, ` : '',
     status += `HTTPS: ${this.httpsServer ? 'true' : 'false'}, `
-    status += `Active: ${this.isActive ? 'true' : 'false'}, `
+    status += this.httpsServer ? `HTTPS Port: ${this.httpStatistics.server.httpsPort}, ` : '',
     status += `AB_DEBUG: ${this.DEBUG ? 'true' : 'false'}`
     
     return `[${status}]`
@@ -172,17 +178,16 @@ export abstract class ABHttpServer {
 
   /**
    * Return the server statistics
-   * @param {-}
+   * @param {void}
    * @returns {statistics} JSON object with server statistics
    */
   getStatistics(): {} {
+    this.DEBUG ? this.logDebug(`Method getStatistics() called`) : true
 
-    // Update statistics
+    // Update statistics and return it to the caller
     const cpuUsage = process.cpuUsage()
-
     this.httpStatistics.server.cpuUsageUserSec = cpuUsage.user / 1000000
     this.httpStatistics.server.cpuUsageSystemSec = cpuUsage.system / 1000000
-
     return this.httpStatistics
   }
 
@@ -190,6 +195,7 @@ export abstract class ABHttpServer {
    * Establish server events and start the server
    * @param {server}  Server
    * @param {port}    TCP/IP port number
+   * @returns {void}
    */
   private startServer(server: any, port: number): void {
 
@@ -200,6 +206,10 @@ export abstract class ABHttpServer {
     server.on('clientError', (error: Error, socket: Socket) => {
       this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${socket.remoteAddress} error: ${error}`) : true
       this.clientError(error, socket)
+    })
+    server.on('error', (error: Error) => {
+      this.DEBUG ? this.logDebug(`HTTP${tlsConnection ? 'S' : ''} error received: ${error}`) : true
+      this.clientError(error, undefined)
     })
 
     if (this.DEBUG) {
@@ -217,9 +227,6 @@ export abstract class ABHttpServer {
       })
       server.on('connection', (socket: Socket) => {
         this.logDebug(`HTTP${tlsConnection ? 'S' : ''} client ${socket.remoteAddress} connected`)
-      })
-      server.on('error', (error: Error) => {
-        this.logDebug(`HTTP${tlsConnection ? 'S' : ''} error received: ${error}`)
       })
       server.on('listening', () => {
         this.logDebug(`HTTP${tlsConnection ? 'S' : ''} server is listening`)
@@ -281,14 +288,14 @@ export abstract class ABHttpServer {
    * Handle all HTTP requests 
    * @param {request}   IncomingMessage object
    * @param {response}  ServerResponse object
+   * @returns {void}
    */
   private processHttpRequest(request: IncomingMessage, response: ServerResponse): void {
 
     const url = require('url')
     const { StringDecoder } = require('string_decoder')
    
-    // Supported HTTP methods based upon HTTP Method Registry at
-    // http://www.iana.org/assignments/http-methods/http-methods.xhtml
+    // Supported HTTP methods (see www.iana.org/assignments/http-methods/http-methods.xhtml)
     const httpMethods = {
       'acl': () => { return (this.acl(requestData, response)) },
       'baseline-control': () => { return (this.baselinecontrol(requestData, response)) },
@@ -335,10 +342,10 @@ export abstract class ABHttpServer {
     // Parse the url
     const parsedUrl: any = url.parse(request.url)
 
-    // Build a container holding all the data of the request
+    // Build an object holding all the data of the request
     const requestData: ABRequest = {
       'server': {
-        'hostname': this.httpStatistics.server.hostname,
+        'hostname': request.headers.host || this.httpStatistics.server.hostname,
         'address': request.socket.localAddress || '',
         'port': request.socket.localPort.toString() || '',
       },
@@ -364,7 +371,14 @@ export abstract class ABHttpServer {
       }
     }
 
-    // Construct key/value object from HTTP querystring (if present)
+    // Set hostname
+    if (request.headers.host) {
+      requestData.server.hostname = request.headers.host.substr(0, request.headers.host.indexOf(':'))
+    } else {
+      requestData.server.hostname = this.httpStatistics.server.hostname
+    }
+
+    // Construct key/value object from URL querystring (if present)
     if (parsedUrl.query) {
       let keyvalues = parsedUrl.query.split('&')
       for (let index = 0; index < keyvalues.length; index++) {
@@ -382,7 +396,7 @@ export abstract class ABHttpServer {
     // Get the http payload (if present)
     const decoder: any = new StringDecoder('utf8')
 
-    request.on('data', (dataChunk: string) => {
+    request.on('data', (dataChunk: Buffer) => {
       requestData.http.data += decoder.write(dataChunk)
     })
     request.on('end', () => {
@@ -390,7 +404,7 @@ export abstract class ABHttpServer {
 
       const contentLength: number = requestData.http.data.length
 
-      this.DEBUG ? this.logDebug(`<= Client ${requestData.client.address} HTTP/${requestData.http.version} (${requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS'}) - ${requestData.http.method.toUpperCase()} - URL /${requestData.url.path} - ${contentLength} bytes`) : true
+      this.DEBUG ? this.logDebug(`<= Client ${requestData.client.address}, HTTP/${requestData.http.version} ${requestData.http.tls ? requestData.http.tlsVersion : 'Non-TLS'}, ${requestData.http.method.toUpperCase()} /${requestData.url.path}, Data ${contentLength} bytes`) : true
       
       // Update statistics
       if (requestData.http.tls) {
@@ -406,7 +420,7 @@ export abstract class ABHttpServer {
       let methodFunction: Function = (<any>httpMethods)[requestData.http.method]
 
       if (typeof (methodFunction) === 'undefined') {
-        this.DEBUG ? this.logDebug(`Client ${requestData.client.address} sent unsupported HTTP Method ${requestData.http.method.toUpperCase()} received`) : true
+        this.DEBUG ? this.logDebug(`Client ${requestData.client.address} sent unsupported HTTP Method ${requestData.http.method.toUpperCase()}`) : true
         methodFunction = (<any>httpMethods)['?']
         allMethodsCall = true
       }
@@ -448,38 +462,10 @@ export abstract class ABHttpServer {
   /**
   * Write debugging data to the console
   * @param {message}  Debug message to be written
+  * @returns {void}
   */
   private logDebug(message: string): void {
     this.DEBUG ? console.debug(`${new Date().toISOString()} ${CLASSNAME}: ${message}`) : true
-  }
-
-  /**
-   * Terminate the HTTP/HTTPS server
-   * @param {-}
-   */
-  terminate(): void {
-
-    if (!this.isActive) {
-      return
-    }
-
-    this.DEBUG ? this.logDebug('Method terminate() called') : true
-
-    if (this.httpServer) {
-      this.httpServer.close()
-      this.httpServer = null
-    }
-
-    if (this.httpsServer) {
-      this.httpsServer.close()
-      this.httpsServer = null
-    }
-
-    // Mark server inactive
-    this.isActive = false
-
-    // Call user method (if present)
-    this.shutdown()
   }
 
   /**
@@ -487,8 +473,10 @@ export abstract class ABHttpServer {
    * @param {response}    ServerResponse object
    * @param {text}        HTML to be sent
    * @param {httpStatus}  HTTP Status code (defaults to 200)
+   * @returns {void}
    */
   sendHTML(response: ServerResponse, text: string, httpStatus: number = 200): void {
+    this.DEBUG ? this.logDebug(`Method sendHTML(*, *, ${httpStatus}) called`) : true
     this.sendData(response, 'text/html', text, httpStatus)
   }
 
@@ -497,8 +485,10 @@ export abstract class ABHttpServer {
    * @param {response}    ServerResponse object
    * @param {text}        Text to be sent
    * @param {httpStatus}  HTTP status code (defaults to 200)
+   * @returns {void}
    */
   sendText(response: ServerResponse, text: string, httpStatus: number = 200): void {
+    this.DEBUG ? this.logDebug(`Method sendText(*, *, ${httpStatus}) called`) : true
     this.sendData(response, 'text/plain', text, httpStatus)
   }
 
@@ -507,8 +497,10 @@ export abstract class ABHttpServer {
    * @param {response}    ServerResponse object
    * @param {jsonData}    JSON data to be sent
    * @param {httpStatus}  HTTP status code (defaults to 200)
+   * @returns {void}
    */
   sendJSON(response: ServerResponse, jsonData: {}, httpStatus: number = 200): void {
+    this.DEBUG ? this.logDebug(`Method sendJSON(*, *, ${httpStatus}) called`) : true
     this.sendData(response, 'application/json', JSON.stringify(jsonData), httpStatus)
   }
 
@@ -517,13 +509,15 @@ export abstract class ABHttpServer {
    * @param {response}      ServerResponse object
    * @param {errorMessage}  Error message
    * @param {httpStatus}    HTTP status code (defaults to 200)
+   * @returns {void}
    */
   private sendError(response: ServerResponse, errorMessage: string, httpStatus: number = 200): void {
     this.sendJSON(response, {
-      'time': new Date().toISOString(),
       'httpStatus': httpStatus,
+      'error': errorMessage,
       'component': CLASSNAME,
-      'error': errorMessage
+      'version:': VERSION,
+      'time': new Date().toISOString()
     }, httpStatus)
   }
 
@@ -531,9 +525,11 @@ export abstract class ABHttpServer {
    * Redirect to new URL
    * @param {response}    ServerResponse object
    * @param {string}      URL to redirect
+   * @returns {void}
    */
-  redirectUrl(response: ServerResponse, redirectURL: string): void {
-    this.sendData(response, 'text/plain', '', 301, { 'Location': redirectURL})
+  redirectUrl(response: ServerResponse, redirectUrl: string): void {
+    this.DEBUG ? this.logDebug(`Method redirectUrl(*, ${redirectUrl}) called`) : true
+    this.sendData(response, 'text/plain', '', 301, { 'Location': redirectUrl})
   }
 
   /**
@@ -542,11 +538,13 @@ export abstract class ABHttpServer {
    * @param {filePath}    File name with path
    * @param {fileRoot}    Check sanitized path with this root directory, defaults to __dirname
    * @param {mimeType}    MIME Type, default is set based on file name extension
+   * @returns {void}
    */
   sendFile(response: ServerResponse, filePath: string, fileRoot: string = __dirname, mimeType: string = ''): void {
+    
+    this.DEBUG ? this.logDebug(`Method sendFile(*, ${filePath}, *, ${mimeType}) called`) : true
 
     const path = require('path')
-    const fs = require('fs')
     
     // File extention to MIME types mapping
     const mimeTypes = {
@@ -619,58 +617,86 @@ export abstract class ABHttpServer {
       '.3gp': 'video/3gpp',
       '.3g2': 'video/3gpp2',
       '.7z': 'application/x-7z-compressed'
-    };
-
-    // Check for poison null bytes attack - Return 400 Bad Request
-    if (filePath.indexOf('\0') !== -1) {
-      this.sendError(response, `The filename ${filePath} contains invalid characters`, 400)
-      return
     }
 
+    // Get content of the file
+    this.readFile(filePath, fileRoot = __dirname, (readError: Error, data: Buffer) => {
+
+      // Check if file could be read
+      if (readError) {
+        this.sendError(response, readError.message, 500)
+        return
+      }
+
+      // Set the MIME type corresponding to the file name if not specified
+      if (mimeType === '') {
+        var fileExtension: string = path.parse(filePath).ext.toLowerCase()
+        mimeType = (<any>mimeTypes)[fileExtension] || 'text/plain'
+      }
+
+      // Send the file with a matching content type
+      this.sendData(response, mimeType, data)
+    })
+  }
+      
+  /**
+   * Return content of a given file
+   * @param {filePath}    File name with path
+   * @param {fileRoot}    Check path with this root directory, defaults to __dirname
+   * @param {callback}    Callback function (Error, Buffer)
+   * @returns {void}
+   */
+  readFile(filePath: string, fileRoot: string = __dirname, callback: Function): void {
+
+    this.DEBUG ? this.logDebug(`Method readFile(${filePath}, *, *) called`) : true
+
+    const path = require('path')
+    const fs = require('fs')
+
+    // Check for poison null bytes attack
+    if (filePath.indexOf('\0') !== -1) {
+      callback(new Error(`The filename ${filePath} contains invalid characters`))
+      return
+    }
+    
     // Normalize the filepath
     const filePathNormalized: String = path.resolve(filePath)
 
     // Check for empty or missing file name
     if (filePath === '') {
-      this.sendError(response, `No filename specified`, 400)
+      callback(new Error(`No filename specified`))
       return
     }
 
-    // Check if file path is outside of the base path - Return 400 Bad Request
+    // Check if file path is outside of the base path
     if (filePathNormalized.indexOf(fileRoot) === -1) {
-      this.sendError(response, `The file ${filePath} is outside of the base directory`, 400)
+      callback(new Error(`The file ${filePath} is outside of the base directory`))
       return
     }
 
     // Get file statistics
     fs.stat(filePathNormalized, (fileError: Error, fileStats: Stats) => {
-      // Check if file exist - Return 404 Bad Request
+      // Check if file exist
       if (fileError) {
-        this.sendError(response, `The file ${filePath} does not exist`, 404)
+        callback(new Error(`The file ${filePath} does not exist`))
         return
       }
-      // Check if file is a directory - Return 400 Bad Request
+      // Check if file is a directory
       if (fileStats.isDirectory()) {
-        this.sendError(response, `The file ${filePath} specifies a directory`, 400)
+        callback(new Error(`The file ${filePath} specifies a directory`))
         return
       }
 
       // Read content of file
       fs.readFile(filePathNormalized, (readError: Error, data: Buffer) => {
-        // File can not be read - Return 500 (Internal Server Error)
+        // File can not be read
         if (readError) {
-          this.sendError(response, `The file ${filePath} could not be read`, 500)
+          callback(new Error(`The file ${filePath} could not be read`))
           return
         }
 
-        // Set the MIME type corresponding to the file name if not specified
-        if (mimeType === '') {
-          var fileExtension: string = path.parse(filePathNormalized).ext.toLowerCase()
-          mimeType = (<any>mimeTypes)[fileExtension] || 'text/plain'
-        }
-
-        // Send the file with a matching content type
-        this.sendData(response, mimeType, data)
+        // Return the file content to the caller
+        callback(false, data)
       });
     })
   }  
@@ -683,10 +709,10 @@ export abstract class ABHttpServer {
    *                  'Access-Control-Allow-Methods': 'GET, POST, DELETE, PUT' })
    * 
    * @param {httpHeaders} HTTP Headers to be added
+   * @returns {void}
    */
   setHeaders(httpHeaders: {}): void {
-    this.DEBUG ? this.logDebug(`Invoked method setHeaders(${httpHeaders})`) : true
-
+    this.DEBUG ? this.logDebug(`Method setHeaders() called`) : true
     this.httpHeaders = httpHeaders
     return
   }
@@ -698,17 +724,14 @@ export abstract class ABHttpServer {
    * @param {text}          Data to be written
    * @param {httpStatus}    HTTP Status code (default = 200)
    * @param {headers}       Additional HTTP headers (default = {})
+   * @returns{void}
    */
   private sendData(response: ServerResponse, mimeType: string, text: string | Buffer, httpStatus: number = 200, headers: {} = {}): void {
 
     // Get length of data to be sent
     let contentLength: number = text.length
 
-    this.DEBUG ? this.logDebug(`=> Client ${response.connection.remoteAddress} Status ${httpStatus} - ${contentLength} bytes - Type ${mimeType}`) : true
-
-    if (!this.isActive) {
-      return
-    }
+    this.DEBUG ? this.logDebug(`=> Client ${response.connection.remoteAddress}, HTTP ${httpStatus}, Data ${mimeType} ${contentLength} bytes`) : true
 
     // Send mandatory HTTP headers
     if (this.httpHeaders) {
@@ -717,7 +740,7 @@ export abstract class ABHttpServer {
       }
     }
 
-    // Send passed HTTP headers
+    // Send passed additional HTTP headers
     if (headers) {
       for (let key in headers) {
         response.setHeader(key, (<any>headers)[key])
@@ -737,13 +760,11 @@ export abstract class ABHttpServer {
     // Update the statistics
     this.httpStatistics.response.count++
     this.httpStatistics.response.bytes += contentLength
-    return
   }
 
   // Event method which can be implemented/overwritten by the users subclass
-  clientError(err: Error, socket: Socket) { }
-  shutdown() { }
-
+  clientError(err: Error, socket: Socket | undefined) { }
+ 
   // HTTP methods which can be implemented/overwritten by the users subclass
   acl(request: ABRequest, response: ServerResponse): any { return false }
   baselinecontrol(request: ABRequest, response: ServerResponse): any { return false }
