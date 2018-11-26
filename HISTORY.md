@@ -1,13 +1,22 @@
 # Revision History
 
-## Version 2.3.0 / xx-Nov-2018
+## Version 2.4.0 / 26-Nov-2018
+
+* Add: Add current time in the statistics object
+* Add: Add support for "GET /api/ping" (see README.md)
+* Add: Add session cookie support (see README.md)
+* Add: Add cookies key/value and session identifier to ABRequest
+* Change: Method toString() now returns a stringified JSON object
+* Change: Major updates to the documentation file README.md
+
+## Version 2.3.0 / 24-Nov-2018
 
 * Change: Better determination of hostname stored in ABRequest
 * Change: Remove method terminate() for consistency
 * Add: Include component version in error JSON object
 * Add: Include debug messages for function invocation, e.g. sendHTML(), getStatistics()
 * Add: Include readFile() method to read content of a file
-* Add: Add the HTTP and HTTPS ports in the statistics object
+* Add: Add the HTTP and HTTPS port in the statistics object
 * Add: Add the HTTP and HTTPS ports in the toString() method
 
 ## Version 2.2.0 / 19-Nov-2018

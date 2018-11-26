@@ -6,7 +6,7 @@ var tls_1 = require("tls");
  */
 // Global constants
 var CLASSNAME = 'ABHttpServer';
-var VERSION = '2.3.0'; //TODO: Class version number
+var VERSION = '2.4.0'; //TODO: Don't forget to update package.json, history.md and readme.md
 /**
  * Abstract class to be implemented/subclassed by the user
 */
@@ -25,12 +25,14 @@ var ABHttpServer = /** @class */ (function () {
         this.httpServer = null;
         this.httpsServer = null;
         this.httpHeaders = {};
+        this.pingEnabled = true;
         // Server statistics object to be returned to the user via getStatistics()
         this.httpStatistics = {
             server: {
                 className: CLASSNAME,
                 classVersion: VERSION,
                 startTime: new Date().toISOString(),
+                currentTime: new Date().toISOString(),
                 startArguments: process.argv,
                 nodeVersion: process.version,
                 httpPort: 0,
@@ -109,21 +111,29 @@ var ABHttpServer = /** @class */ (function () {
         }
     }
     /**
+     * Disable /api/ping support
+     * @param {void}
+     * @returns {void}
+     */
+    ABHttpServer.prototype.disablePing = function () {
+        this.pingEnabled = false;
+    };
+    /**
      * Return string of object
-     * @param {-}
+     * @param {void}
      * @returns {string} String representation of ABHttpServer object
      */
     ABHttpServer.prototype.toString = function () {
         this.DEBUG ? this.logDebug("Method toString() called") : true;
-        var status = '';
-        status += "Class: " + CLASSNAME + ", ";
-        status += "Host: " + this.httpStatistics.server.hostname + ", ";
-        status += "HTTP: " + (this.httpServer ? 'true' : 'false') + ", ";
-        status += this.httpServer ? "HTTP Port: " + this.httpStatistics.server.httpPort + ", " : '',
-            status += "HTTPS: " + (this.httpsServer ? 'true' : 'false') + ", ";
-        status += this.httpsServer ? "HTTPS Port: " + this.httpStatistics.server.httpsPort + ", " : '',
-            status += "AB_DEBUG: " + (this.DEBUG ? 'true' : 'false');
-        return "[" + status + "]";
+        var status = {
+            'Class': CLASSNAME,
+            'Version': VERSION,
+            'Host': this.httpStatistics.server.hostname,
+            'Http': this.httpStatistics.server.httpPort,
+            'Https': this.httpStatistics.server.httpsPort,
+            'Debug': this.DEBUG
+        };
+        return JSON.stringify(status);
     };
     /**
      * Return the server statistics
@@ -136,6 +146,7 @@ var ABHttpServer = /** @class */ (function () {
         var cpuUsage = process.cpuUsage();
         this.httpStatistics.server.cpuUsageUserSec = cpuUsage.user / 1000000;
         this.httpStatistics.server.cpuUsageSystemSec = cpuUsage.system / 1000000;
+        this.httpStatistics.server.currentTime = new Date().toISOString();
         return this.httpStatistics;
     };
     /**
@@ -235,6 +246,7 @@ var ABHttpServer = /** @class */ (function () {
         var _this = this;
         var url = require('url');
         var StringDecoder = require('string_decoder').StringDecoder;
+        var crypto = require('crypto');
         // Supported HTTP methods (see www.iana.org/assignments/http-methods/http-methods.xhtml)
         var httpMethods = {
             'acl': function () { return (_this.acl(requestData, response)); },
@@ -298,6 +310,7 @@ var ABHttpServer = /** @class */ (function () {
                 'tlsCipher': '',
                 'method': request.method.toLowerCase() || '',
                 'headers': request.headers || '',
+                'cookies': {},
                 'data': ''
             },
             'ip': {
@@ -306,7 +319,8 @@ var ABHttpServer = /** @class */ (function () {
             'url': {
                 'path': decodeURI(parsedUrl.pathname).replace(/^\/+|\/+$/g, '').trim() || '',
                 'query': {}
-            }
+            },
+            'sessionId': ''
         };
         // Set hostname
         if (request.headers.host) {
@@ -322,6 +336,30 @@ var ABHttpServer = /** @class */ (function () {
                 var keyvalue = keyvalues[index].split('=');
                 requestData.url.query[keyvalue[0]] = keyvalue[1];
             }
+        }
+        // Save all cookies as key/value pairs for easier access
+        var httpCookies = request.headers['cookie'] || '';
+        if (httpCookies.length > 0) {
+            var httpCookieValues = httpCookies.toString().trim().split(';');
+            // Split the "Key=Value" ('=' sign may also appear in value or is missing completely)
+            for (var index = 0; index < httpCookieValues.length; index++) {
+                var cookie = httpCookieValues[index].trim();
+                var stringPosition = cookie.indexOf('=');
+                if (stringPosition === -1) {
+                    requestData.http.cookies[cookie] = '';
+                }
+                else {
+                    var key = cookie.substr(0, stringPosition).trim().toLowerCase();
+                    var value = cookie.substr(stringPosition + 1).trim();
+                    requestData.http.cookies[key] = value;
+                }
+            }
+        }
+        // Get the previous ABSession identifier or create a new one
+        requestData.sessionId = requestData.http.cookies['absession'] || '';
+        if (requestData.sessionId === '') {
+            requestData.sessionId = crypto.randomBytes(32).toString('base64');
+            response.setHeader('Set-Cookie', "ABSession=" + requestData.sessionId);
         }
         // Get TLS version and cipher
         if (requestData.http.tls) {
@@ -345,6 +383,13 @@ var ABHttpServer = /** @class */ (function () {
             else {
                 _this.httpStatistics.request.http.count++;
                 _this.httpStatistics.request.http.bytes += contentLength;
+            }
+            // Send automatic response for "GET /api/ping" 
+            if (_this.pingEnabled) {
+                if (requestData.http.method === 'get' && requestData.url.path.toLowerCase() === 'api/ping') {
+                    _this.sendJSON(response, { "response": "ok" });
+                    return;
+                }
             }
             // Get the specific function to handle the HTTP method or the generic getMethods() function
             var allMethodsCall = false;

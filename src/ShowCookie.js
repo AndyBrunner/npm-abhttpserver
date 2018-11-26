@@ -22,7 +22,7 @@ var MyServer = /** @class */ (function (_super) {
         return _super !== null && _super.apply(this, arguments) || this;
     }
     MyServer.prototype.get = function (request, response) {
-        this.sendText(response, "Unique session identifier: " + request.sessionId);
+        this.sendText(response, "The unique session identifier is " + request.sessionId);
     };
     return MyServer;
 }(ABHttpServer_1.ABHttpServer));

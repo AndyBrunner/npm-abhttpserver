@@ -10,9 +10,9 @@ npm install @types/node
 npm install abhttpserver
 ```
 
-## Example: HelloWorld.ts
+## Example: HelloWorld
 
-Starts an HTTP server on port 8080 which responds every client request with "Hello world!".
+Starts an HTTP server on port 8080 which responds every client request with a simple `Hello world!` text.
 
 ```typescript
 import { ABHttpServer, ABRequest } from './ABHttpServer'
@@ -26,89 +26,61 @@ class MyServer extends ABHttpServer {
 var myServer = new MyServer(8080)
 ```
 
-## Example: GetPost.ts
-
-Start a HTTP and HTTPS server on ports 8080 and 8081). All requests from both servers are handled thru the same class methods. For GET requests with an URL /stats, the server sends back a JSON object with some server statistic, all other GET requests will receive a text line with the send URL. All POST requests will be answered with the data sent in the body of the POST request.
-
-```typescript
-import { ABHttpServer, ABRequest} from './ABHttpServer'
-import { ServerResponse } from 'http';
-
-class MyServer extends ABHttpServer {
-  get(request: ABRequest, response: ServerResponse) {
-    if (request.url.path === 'stats') {
-      this.sendJSON(response, this.getStatistics())
-    } else {
-      this.sendText(response, `The URL sent was ${request.url.path}`)
-    }
-  }
-  post(request: ABRequest, response: ServerResponse) {
-    this.sendJSON(response, { data: `The raw data sent was ${request.http.data}` })
-  }
-}
-var myServer = new MyServer(8080, 8081)
-```
-
-## Example: RedirectHttps.ts
-
-Redirect all non-secure HTTP GET request to HTTPS.
-
-```typescript
-import { ABHttpServer, ABRequest } from './ABHttpServer'
-import { ServerResponse } from 'http';
-
-class MyServer extends ABHttpServer {
-  get(request: ABRequest, response: ServerResponse) {
-    if (!request.http.tls) {
-      this.redirectUrl(response, `https://${request.server.hostname}:8081/${request.url.path}`)
-      return
-    }
-    this.sendText(response, `The secure connection is established`)
-  }
-}
-var myServer = new MyServer(8080, 8081)
-```
-
-## Example: FileServer.ts
-
-Basic HTTP server to serve static files. The HTTP content type is set according to the file name extension.
-
-```typescript
-import { ABHttpServer, ABRequest } from './ABHttpServer'
-import { ServerResponse } from 'http';
-
-class MyServer extends ABHttpServer {
-  get(request: ABRequest, response: ServerResponse) {
-    this.sendFile(response, request.url.path)
-  }
-}
-var myServer = new MyServer(8080, 8081)
-```
-
 ## Features
 
-* Support for HTTP/2 over TLS with fallback to HTTP 1.1
-* Supports all HTTP methods (GET, POST, PUT, DELETE, OPTIONS, etc.) thru corresponding methods. Calls allMethods() if no corresponding function found
-* An object ABRequest is passed to every user method with various information about the HTTP request
-* Include methods for easy access to the data (Text, HTML, JSON).
-* Errors are sent back to the client as JSON objects
-* Detailed console debugging thru AB_DEBUG environment variable
+### TypeScript Language
 
-## Notes
+This NPM module is written in TypeScript language. This language allows for smaller, cleaner code and an easier implementation of classes, subclasses and class methods. This module does not use or require any framework or additional NPM module. The implementing user code can also be written in TypeScript or in standard JavaScript language.
 
-* This module does not require any framework or additional NPM module.
-* The HTTPS server certificate and the trusted certificate chain are read from "key.pem" and
-  "cert.pem". A self signed certificate is included for testing purpose.
+### ABRequest Object
 
-## Debugging
+Before calling the user method, an ABRequest object is created which contains useful information about the environment, HTTP request, HTTP headers, URL, passed data, etc.
 
-Detailed debugging to the console is supported by setting the environment variable AB_DEBUG (all uppercase) to true. The debugging data includes most of the HTTP/HTTPS server events and may result in a lot of data sent to the console.
+### Server Statistics
+
+The method `getStatistics()` returns an JSON object with information about the server, operating system, CPU, used processor time and the served requests.
+
+### Supporting Methods
+
+Several methods are included to allow an easy access and handling of the data, e.g. `sendText()`, `sendHTML()`, `sendJSON()`, `readFile()`, `sendFile()`, `redirectUrl()`, etc.
+
+### Error Handling
+
+All errors are sent back to the client as a formatted JSON string, e.g. `{ "httpStatus": 500, "error": "The file rongfile.txt does not exist", "component": "ABHttpServer", "version:": "2.3.0", "time": "2018-11-25T07:01:38.302Z" }`. Whenever possible, the server will call the method `clientError(Error, Socket)` (if present) for communication or protocol errors to allow the user code to handle the error.
+
+### HTTP/2 Support
+
+Secure connections over TLS are established with the HTTP/2 protocol. If the client does not support HTTP/2, the server will fallback to HTTP 1.1. The negotiated protocol version and cypher are stored in the ABRequest object.
+
+### HTTPS Support
+
+The HTTPS server certificate and the trusted certificate chain are read from `key.pem` and `cert.pem`. A self signed certificate is included for testing purpose.
+
+### HTTP Methods Support
+
+All standard HTTP methods (e.g. GET, POST, DELETE, OPTIONS, etc.) are supported. The user method is called based on the HTTP method e.g. `get(request, response)`. If no corresponding method is found, the generic `allMethods(request, response)` will be called. If this generic method is also missing, an `HTTP 501 Not Implemented` error is returned.
+
+### Support for GET /api/ping
+
+The server will automatically respond to a `GET /api/ping` request with the JSON response `{ "response": "ok" }`. Monitoring or up-time services may use this function to check for server availability. This behaviour can be disabled by calling the method `disablePing()`.
+
+### Support for Session Cookie
+
+For each client, the server will generate a unique 32 byte base-64 coded session identifier. This id will be sent to the client in the HTTP header, e.g. `Set-Cookie: ABSession=IHBlIbFDbxu9SvCSZ6vjDk9KE/Hcyw4NGUPYffNzsI4=`. As in every cookie implementation, the client code will have to send back this cookie to the server with each request. The cookie name is treated case insensitive on the server, so the cookie can be sent back as `ABSession` or `absession`. By using this session cookie, the server and client may implement a session identification. Since there is no `Expires=` tag definied, the cookie resides only in memory and will be deleted if the client or server terminates.
+
+### Example Code
+
+Various code examples are included. See `HelloWorld.ts`, `GetPost.ts`, `FileServer.ts`, `ShowCookie.ts` and `RedirectUrl.ts`.
+
+### Debugging
+
+Detailed debugging is supported by setting the environment variable `AB_DEBUG=true` (case sensitive). The debugging data is sent to `console.debug()` and includes an exact timestamp with the class name, all HTTP server events and some useful information about the data received and sent. It may result in a lot of data sent to the console.
+
+Example
 
 ```bash
 AB_DEBUG=true node app.js
 ```
-
-## Example debug output
 
 ```text
 2018-11-24T13:46:11.196Z ABHttpServer: Class version 2.3.0 constructor called (8080, 8081)
@@ -136,20 +108,18 @@ AB_DEBUG=true node app.js
 
 ```
 
-## Prerequisits
+## Prerequisites
 
-* Node.js 10.10+ (HTTP/2 requirement)
-* Typescript
+* Node.js 10.10+ (This is an HTTP/2 requirement)
+* Typescript (If the user code is written in TypeScript)
 
-## Unlicense
-
-See [unlicense.org](http://unlicense.org)
+## Unlicense (see [unlicense.org](http://unlicense.org))
 
 _This software shall be used for Good, not Evil._
 
 ## GIT Source code
 
-You will find the source code on [GitHub](https://github.com/AndyBrunner/npm-abhttpserver.git)
+The complete source code is available on [GitHub](https://github.com/AndyBrunner/npm-abhttpserver.git)
 
 ## Support
 

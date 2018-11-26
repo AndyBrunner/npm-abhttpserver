@@ -18,6 +18,7 @@ export declare type ABRequest = {
         'tlsCipher': string;
         'method': string;
         'headers': {};
+        'cookies': {};
         'data': string;
     };
     'ip': {
@@ -27,6 +28,7 @@ export declare type ABRequest = {
         'path': string;
         'query': {};
     };
+    'sessionId': '';
 };
 /**
  * Abstract class to be implemented/subclassed by the user
@@ -36,6 +38,7 @@ export declare abstract class ABHttpServer {
     private httpServer;
     private httpsServer;
     private httpHeaders;
+    private pingEnabled;
     private httpStatistics;
     /**
      * Create the HTTP server
@@ -45,8 +48,14 @@ export declare abstract class ABHttpServer {
      */
     constructor(httpPort?: number, httpsPort?: number);
     /**
+     * Disable /api/ping support
+     * @param {void}
+     * @returns {void}
+     */
+    disablePing(): void;
+    /**
      * Return string of object
-     * @param {-}
+     * @param {void}
      * @returns {string} String representation of ABHttpServer object
      */
     toString(): string;

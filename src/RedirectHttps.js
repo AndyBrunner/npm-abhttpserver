@@ -1,5 +1,6 @@
 "use strict";
 // Example: RedirectHttps.ts
+// Purpose: Redirect all non-secure HTTP GET request to HTTPS.
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||

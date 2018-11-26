@@ -1,4 +1,5 @@
 // Example: RedirectHttps.ts
+// Purpose: Redirect all non-secure HTTP GET request to HTTPS.
 
 import { ABHttpServer, ABRequest } from './ABHttpServer'
 import { ServerResponse } from 'http';

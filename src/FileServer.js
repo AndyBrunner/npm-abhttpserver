@@ -1,5 +1,6 @@
 "use strict";
 // Example: FileServer.ts
+// Purpose: Basic HTTP server to serve static files. The HTTP content type is set according to the file name extension.
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||

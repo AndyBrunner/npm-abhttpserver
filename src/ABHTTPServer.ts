@@ -9,7 +9,7 @@ import { Stats } from 'fs';
 
 // Global constants
 const CLASSNAME: string = 'ABHttpServer'
-const VERSION: string   = '2.3.0'           //TODO: Class version number
+const VERSION: string   = '2.4.0'           //TODO: Don't forget to update package.json, history.md and readme.md
 
 // Define request object to be passed to every user method
 export type ABRequest = {
@@ -29,6 +29,7 @@ export type ABRequest = {
     'tlsCipher': string,
     'method': string,
     'headers': {},
+    'cookies': {},
     'data': string,
   },
   'ip': {
@@ -37,7 +38,8 @@ export type ABRequest = {
   'url': {
     'path': string,
     'query': {}
-  }
+  },
+  'sessionId': ''
 }
 
 /**
@@ -45,10 +47,11 @@ export type ABRequest = {
 */
 export abstract class ABHttpServer {
 
-  private DEBUG: boolean      = (process.env.AB_DEBUG === 'true') ? true : false
-  private httpServer: any     = null
-  private httpsServer: any    = null
-  private httpHeaders: Object = {}
+  private DEBUG: boolean        = (process.env.AB_DEBUG === 'true') ? true : false
+  private httpServer: any       = null
+  private httpsServer: any      = null
+  private httpHeaders: Object   = {}
+  private pingEnabled: boolean  = true 
 
   // Server statistics object to be returned to the user via getStatistics()
   private httpStatistics = {
@@ -56,6 +59,7 @@ export abstract class ABHttpServer {
       className: CLASSNAME,
       classVersion: VERSION,
       startTime: new Date().toISOString(),
+      currentTime: new Date().toISOString(),
       startArguments: process.argv,
       nodeVersion: process.version,
       httpPort: 0,
@@ -155,25 +159,33 @@ export abstract class ABHttpServer {
   }
 
   /**
+   * Disable /api/ping support
+   * @param {void}
+   * @returns {void}
+   */
+  disablePing(): void {
+    this.pingEnabled = false
+  }
+
+  /**
    * Return string of object
-   * @param {-}
+   * @param {void}
    * @returns {string} String representation of ABHttpServer object
    */
   toString(): string {
     
     this.DEBUG ? this.logDebug(`Method toString() called`) : true
 
-    let status: string = ''
+    let status = {
+      'Class': CLASSNAME,
+      'Version' : VERSION,
+      'Host' : this.httpStatistics.server.hostname,
+      'Http' : this.httpStatistics.server.httpPort,
+      'Https': this.httpStatistics.server.httpsPort,
+      'Debug' : this.DEBUG
+    }
 
-    status += `Class: ${CLASSNAME}, `
-    status += `Host: ${this.httpStatistics.server.hostname}, `
-    status += `HTTP: ${this.httpServer ? 'true' : 'false'}, `
-    status += this.httpServer ? `HTTP Port: ${this.httpStatistics.server.httpPort}, ` : '',
-    status += `HTTPS: ${this.httpsServer ? 'true' : 'false'}, `
-    status += this.httpsServer ? `HTTPS Port: ${this.httpStatistics.server.httpsPort}, ` : '',
-    status += `AB_DEBUG: ${this.DEBUG ? 'true' : 'false'}`
-    
-    return `[${status}]`
+    return JSON.stringify(status)
   }
 
   /**
@@ -188,6 +200,7 @@ export abstract class ABHttpServer {
     const cpuUsage = process.cpuUsage()
     this.httpStatistics.server.cpuUsageUserSec = cpuUsage.user / 1000000
     this.httpStatistics.server.cpuUsageSystemSec = cpuUsage.system / 1000000
+    this.httpStatistics.server.currentTime = new Date().toISOString()
     return this.httpStatistics
   }
 
@@ -294,6 +307,7 @@ export abstract class ABHttpServer {
 
     const url = require('url')
     const { StringDecoder } = require('string_decoder')
+    const crypto = require('crypto')
    
     // Supported HTTP methods (see www.iana.org/assignments/http-methods/http-methods.xhtml)
     const httpMethods = {
@@ -360,6 +374,7 @@ export abstract class ABHttpServer {
         'tlsCipher': '',
         'method': request.method!.toLowerCase() || '',
         'headers': request.headers || '',
+        'cookies': {},
         'data': '',
       },
       'ip': {
@@ -368,7 +383,8 @@ export abstract class ABHttpServer {
       'url': {
         'path': decodeURI(parsedUrl.pathname).replace(/^\/+|\/+$/g, '').trim()  || '',
         'query': {}
-      }
+      },
+      'sessionId': ''
     }
 
     // Set hostname
@@ -385,6 +401,34 @@ export abstract class ABHttpServer {
         let keyvalue = keyvalues[index].split('=');
         (<any>requestData.url.query)[keyvalue[0]] = keyvalue[1];
       }
+    }
+
+    // Save all cookies as key/value pairs for easier access
+    let httpCookies = request.headers['cookie'] || ''
+    
+    if (httpCookies.length > 0) {
+      let httpCookieValues = httpCookies.toString().trim().split(';')
+
+      // Split the "Key=Value" ('=' sign may also appear in value or is missing completely)
+      for (let index = 0; index < httpCookieValues.length; index++) {
+        let cookie: string = httpCookieValues[index].trim()
+        let stringPosition: number = cookie.indexOf('=')
+        if (stringPosition === -1) {
+          (<any>requestData.http.cookies)[cookie] = ''
+        } else {
+          let key: string = cookie.substr(0, stringPosition).trim().toLowerCase()
+          let value: string = cookie.substr(stringPosition + 1).trim();
+          (<any>requestData.http.cookies)[key] = value
+        }
+      }
+    }
+  
+    // Get the previous ABSession identifier or create a new one
+    requestData.sessionId = (<any>requestData.http.cookies)['absession'] || ''
+
+    if (requestData.sessionId === '') {
+      requestData.sessionId = crypto.randomBytes(32).toString('base64')
+      response.setHeader('Set-Cookie', `ABSession=${requestData.sessionId}`)
     }
 
     // Get TLS version and cipher
@@ -413,6 +457,14 @@ export abstract class ABHttpServer {
       } else {
         this.httpStatistics.request.http.count++
         this.httpStatistics.request.http.bytes += contentLength
+      }
+
+      // Send automatic response for "GET /api/ping" 
+      if (this.pingEnabled) {
+        if (requestData.http.method === 'get' && requestData.url.path.toLowerCase() === 'api/ping') {
+          this.sendJSON(response, { "response": "ok" })
+          return
+        }
       }
 
       // Get the specific function to handle the HTTP method or the generic getMethods() function
